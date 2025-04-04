@@ -76,5 +76,79 @@ class GaussianObstacle(DynamicObstacle):
         movement = np.random.multivariate_normal(scaled_mean,scaled_covariance) # Sample a random movement
         self.move(movement) # Apply the movement
 
-class GMMObstacle(DynamicObstacle):
-    pass
+class GMMMixingObstacle(DynamicObstacle):
+    
+    # Simulate multimodal movement patterns
+    def __init__(self, position: np.ndarray, radius:float, 
+                means: List[np.ndarray], covariances: List[np.ndarray],
+                weights: List[float]):
+        super().__init__(position, radius)
+
+        weights = np.array(weights, dtype=float)
+        weights = weights/ np.sum(weights)
+
+        self.n_components = len(weights)
+        self.means = [np.array(mean, dtype=float) for mean in means]
+        self.covariances= [np.array(cov, dtype=float) for cov in covariances]
+        self.weights = weights
+
+    def update(self, dt: float):
+
+        component_idx = np.random.choice(self.n_components, p = self.weights)
+
+        mean = self.means[component_idx] * dt
+        cov = self.covariances[component_idx] * dt
+
+        movement = np.random.multivariate_normal(mean, cov)
+
+        self.move(movement)
+
+class TimeVaryingGaussianObstacle(DynamicObstacle):
+
+    def __init__(self, position: np.ndarray, radius: float,
+                 initial_mean: np.ndarray, initial_cov: np.ndarray,
+                 variance_growth_rate: float = 0.0):
+        
+        super().__init__(position, radius)
+        self.mean = np.array(initial_mean, dtype=float)
+        self.covariance = np.array(initial_cov, dtype=float)
+        self.variance_growth_rate = variance_growth_rate
+        self.time = 0.0
+
+    def update(self, dt: float):
+
+        self.time += dt
+
+        current_cov = self.covariance + self.variance_growth_rate * self.time
+
+        scaled_mean = self.mean * dt
+        scaled_cov = current_cov * dt
+        movement = np.random.multivariate_normal(scaled_mean, scaled_cov)
+
+        self.move(movement)
+
+class ObstacleSet:
+
+    def __init__(self, obstacles: Optional[List[Obstacle]] = None):
+        self.obstacles = obstacles if obstacles is not None else []
+
+    def add_obstacle(self, obstacle: Obstacle):
+        self.obstacles.append(obstacle)
+
+    def get_obstacles(self) -> List[Obstacle]:
+        return self.obstacles
+    
+    def update_all(self, dt: float):
+        for obstacle in self.obstacles:
+            obstacle.update(dt)
+
+    def check_collision(self, point: np.ndarray, safety_margin: float = 0.0) -> bool:
+        return any(obs.is_collision(point, safety_margin) for obs in self.obstacles)
+    
+    def collect_movements(self) -> List[np.ndarray]:
+        movements = []
+        for obstacle in self.obstacles:
+            if isinstance(obstacle, DynamicObstacle):
+                movements.extend(obstacle.get_movements())
+        return movements
+    
