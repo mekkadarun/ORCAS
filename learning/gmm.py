@@ -62,6 +62,27 @@ class GMMModel:
         self.model.fit(self.data)
         self.is_fitted = True
         return True
+    
+    # In gmm.py, add to the GMMModel class
+    def update_with_sliding_window(self, new_data: np.ndarray, window_size: int = 50):
+        """
+        Update the GMM using a sliding window of the most recent observations.
+        
+        Args:
+            new_data: New observation data
+            window_size: Maximum window size
+        """
+        # Add new data
+        self.add_data(new_data)
+        
+        # Keep only the most recent data points
+        if len(self.data) > window_size:
+            self.data = self.data[-window_size:]
+        
+        # Refit the model
+        self.fit()
+        
+        return self.is_fitted
         
     def get_mixture_components(self) -> Tuple[np.ndarray, List[np.ndarray], List[np.ndarray]]:
         """
@@ -203,20 +224,24 @@ class OnlineDistributionLearner:
         """
         return self.obstacle_ambiguity_sets.get(obstacle_id)
     
-    def add_movement_data(self, obstacle_id: Union[str, int], movement_data: np.ndarray):
+    # In gmm.py, modify the add_movement_data method in OnlineDistributionLearner
+    def add_movement_data(self, obstacle_id: Union[str, int], movement_data: np.ndarray, 
+                        window_size: int = 50):
         """
-        Add movement data for an obstacle.
+        Add movement data for an obstacle and update with sliding window.
         
         Args:
             obstacle_id: Identifier for the obstacle
             movement_data: Array of movement vectors
+            window_size: Size of the sliding window
         """
         ambiguity_set = self.get_ambiguity_set(obstacle_id)
         
         if ambiguity_set is None:
             ambiguity_set = self.create_ambiguity_set(obstacle_id)
             
-        ambiguity_set.add_movement_data(movement_data)
+        # Add data with sliding window
+        ambiguity_set.gmm_model.update_with_sliding_window(movement_data, window_size)
     
     def update_all(self) -> Dict[Union[str, int], bool]:
         """

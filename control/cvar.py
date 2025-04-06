@@ -108,3 +108,93 @@ def dist_robust_cvar_constraint(
     # The constraint is that CVaR >= 0
     # Which means risk of unsafe distance is limited to alpha
     return [cvar_expr >= 0]
+
+def gaussian_cvar_approximation(mean: float, std_dev: float, alpha: float = 0.95) -> float:
+    """
+    Analytical approximation of CVaR for a Gaussian distribution.
+    
+    Args:
+        mean: Mean of the distribution
+        std_dev: Standard deviation
+        alpha: Confidence level
+    
+    Returns:
+        Approximate CVaR value
+    """
+    from scipy.stats import norm
+    
+    # Handle numerical edge cases
+    if std_dev < 1e-10:
+        return mean  # If variance is essentially zero, return mean
+        
+    try:
+        # Prevent numerical issues
+        alpha = min(max(alpha, 0.001), 0.999)
+        var = mean - norm.ppf(alpha) * std_dev  # Value-at-Risk
+        cvar = mean - std_dev * norm.pdf(norm.ppf(alpha)) / (1 - alpha)
+        
+        # Handle potential numerical issues
+        if not np.isfinite(cvar):
+            return mean
+            
+        return cvar
+    except:
+        # Fall back to a conservative approximation
+        return mean - 3 * std_dev  # Roughly equivalent to alpha=0.99
+
+def simplified_cvar_constraint(
+    robot_position: cp.Variable,
+    obstacle_position: np.ndarray,
+    components: List[Dict],
+    safety_radius: float,
+    alpha: float = 0.95
+) -> List[cp.Constraint]:
+    """
+    Create simplified CVaR constraints using analytical approximation.
+    
+    Args:
+        robot_position: CVXPY variable for robot position
+        obstacle_position: Position of the obstacle
+        components: GMM components (weights, means, covariances)
+        safety_radius: Safety radius
+        alpha: Confidence level
+        
+    Returns:
+        List of CVXPY constraints
+    """
+    constraints = []
+    
+    # For each GMM component
+    for component in components:
+        weight = component['weight']
+        mean = component['mean']
+        cov = component['covariance']
+        
+        # Project the Gaussian distribution along multiple directions
+        # This is a simplification, but should work well for convex obstacles
+        directions = [
+            np.array([1.0, 0.0, 0.0]),  # x-axis
+            np.array([0.0, 1.0, 0.0]),  # y-axis
+            np.array([0.0, 0.0, 1.0]),  # z-axis
+            np.array([1.0, 1.0, 0.0]) / np.sqrt(2),  # xy diagonal
+            np.array([1.0, 0.0, 1.0]) / np.sqrt(2),  # xz diagonal
+            np.array([0.0, 1.0, 1.0]) / np.sqrt(2)   # yz diagonal
+        ]
+        
+        # For each direction, create a constraint
+        for dir_vec in directions:
+            # Project the Gaussian distribution along the direction vector
+            proj_mean = dir_vec @ mean
+            proj_var = dir_vec @ cov @ dir_vec
+            proj_std = np.sqrt(proj_var)
+            
+            # Calculate the minimum distance using CVaR approximation
+            min_dist = gaussian_cvar_approximation(proj_mean, proj_std, alpha)
+            
+            # Create a linear constraint: (x-x_obs)·dir >= d
+            # This is a convex constraint and DCP-compliant
+            distance = (safety_radius - min_dist) * 0.2
+            if distance > 0:  # Only add constraint if the distance is positive
+                constraints.append(dir_vec @ (robot_position - obstacle_position) >= distance)
+    
+    return constraints

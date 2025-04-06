@@ -1,6 +1,9 @@
 import numpy as np
+import mosek
+mosek.Env().putlicensepath("/home/arunmekkad/mosek/mosek.lic")
 import cvxpy as cp
 from typing import List, Dict, Tuple, Optional, Union
+from control.cvar import dist_robust_cvar_constraint, simplified_cvar_constraint
 
 
 class MPC:
@@ -186,8 +189,6 @@ class DistributionallyRobustMPC(MPC):
         Returns:
             Tuple of (CVXPY problem, state variables, control variables)
         """
-        from control.cvar import dist_robust_cvar_constraint
-        
         # First, set up the base MPC problem
         problem, states, controls = self.setup_problem(
             initial_state, reference_trajectory, state_constraints, control_constraints
@@ -201,15 +202,15 @@ class DistributionallyRobustMPC(MPC):
         for obstacle in obstacles:
             position = obstacle['position']
             components = obstacle['ambiguity_components']
-            safety_radius_sq = obstacle['safety_radius'] ** 2
+            safety_radius = obstacle['safety_radius']
             
             for t in range(1, self.horizon + 1):  # Start from t=1 (first prediction)
                 # Get the robot's position from the state
                 robot_position = self.C @ states[t]  # Assuming C extracts the position
                 
-                # Add the distributionally robust CVaR constraint
-                cvar_constraints = dist_robust_cvar_constraint(
-                    robot_position, position, components, safety_radius_sq, self.alpha
+                # Add the simplified CVaR constraint
+                cvar_constraints = simplified_cvar_constraint(
+                    robot_position, position, components, safety_radius, self.alpha
                 )
                 
                 constraints.extend(cvar_constraints)
@@ -245,7 +246,8 @@ class DistributionallyRobustMPC(MPC):
         
         # Solve the problem
         try:
-            problem.solve(solver=cp.ECOS, verbose=False)
+           
+            problem.solve(solver=cp.MOSEK, verbose=True, mosek_params={'MSK_DPAR_INTPNT_CO_TOL_REL_GAP': 1e-8})
             
             if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:
                 # Return the first control action
@@ -257,3 +259,93 @@ class DistributionallyRobustMPC(MPC):
         except cp.error.SolverError as e:
             print(f"Solver error: {e}")
             return None
+        
+    def solve_sequential_linearization(self, 
+                                    initial_state: np.ndarray,
+                                    reference_trajectory: np.ndarray,
+                                    obstacles: List[Dict],
+                                    quadrotor_model,
+                                    max_iterations: int = 3,
+                                    state_constraints: Optional[Dict] = None,
+                                    control_constraints: Optional[Dict] = None) -> Optional[np.ndarray]:
+        """
+        Solve using sequential linearization for nonlinear MPC.
+        
+        Args:
+            initial_state: Initial state vector
+            reference_trajectory: Reference trajectory for outputs
+            obstacles: List of obstacle information
+            quadrotor_model: QuadrotorModel instance for linearization
+            max_iterations: Maximum number of linearization iterations
+            state_constraints: Optional state constraints
+            control_constraints: Optional control constraints
+            
+        Returns:
+            Optimal control input or None if infeasible
+        """
+        # Initial guess for control - default to basic vertical thrust
+        control = np.array([5.0, 0.0, 0.0, 0.0])
+        
+        # Initial state for prediction
+        predicted_state = initial_state.copy()
+        
+        # First, try solving without sequential linearization
+        try:
+            print("Attempting to solve with standard method first...")
+            std_control = self.solve_with_obstacles(
+                initial_state, 
+                reference_trajectory, 
+                obstacles,
+                state_constraints, 
+                control_constraints
+            )
+            if std_control is not None:
+                print("Standard solution found successfully.")
+                return std_control
+        except Exception as e:
+            print(f"Standard solution failed with error: {e}")
+        
+        # If standard approach fails, try sequential linearization
+        print("Attempting sequential linearization...")
+        
+        # Track if we ever get a valid solution
+        any_success = False
+        
+        # Iterative linearization and solving
+        for i in range(max_iterations):
+            try:
+                # Linearize around current prediction
+                A, B = quadrotor_model.linearize(predicted_state, control)
+                
+                # Update system matrices
+                self.A = A
+                self.B = B
+                
+                # Solve the linearized problem
+                new_control = self.solve_with_obstacles(
+                    initial_state, 
+                    reference_trajectory, 
+                    obstacles,
+                    state_constraints, 
+                    control_constraints
+                )
+                
+                if new_control is not None:
+                    control = new_control
+                    any_success = True
+                    # Update state prediction for next linearization
+                    predicted_state = quadrotor_model.forward_dynamics(predicted_state, control)
+                    print(f"Iteration {i+1}: Solution found.")
+                else:
+                    print(f"Iteration {i+1}: No solution found.")
+                    # If we already have at least one good solution, break
+                    if any_success:
+                        break
+                    
+            except Exception as e:
+                print(f"Iteration {i+1} failed with error: {e}")
+                # If we already have at least one good solution, break
+                if any_success:
+                    break
+                
+        return control

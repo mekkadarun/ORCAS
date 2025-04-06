@@ -16,7 +16,7 @@ class QuadrotorEnvironment:
     Integrates the quadrotor model, obstacles, and controllers.
     """
     
-    def __init__(self, dt: float = 0.1, enable_learning: bool = True):
+    def __init__(self, dt: float = 0.1, enable_learning: bool = True, use_sequential_linearization: bool = True):
         """
         Initialize the environment.
         
@@ -46,6 +46,12 @@ class QuadrotorEnvironment:
         # Online learning
         self.enable_learning = enable_learning
         self.learner = OnlineDistributionLearner()
+
+        # Add new option
+        self.use_sequential_linearization = use_sequential_linearization
+        
+        # Add sliding window size parameter
+        self.learning_window_size = 50
         
         # For each obstacle, create an ambiguity set
         if self.enable_learning:
@@ -118,13 +124,9 @@ class QuadrotorEnvironment:
         """
         self.controller = controller
         
-    def step(self) -> Tuple[bool, bool]:
-        """
-        Execute one time step of the simulation.
         
-        Returns:
-            Tuple of (success, collision)
-        """
+    def step(self) -> Tuple[bool, bool]:
+        """Execute one time step of the simulation."""
         if self.controller is None:
             raise ValueError("Controller not set")
         
@@ -136,10 +138,14 @@ class QuadrotorEnvironment:
             for i, obstacle in enumerate(self.obstacle_set.get_obstacles()):
                 if hasattr(obstacle, 'movements') and len(obstacle.movements) > 0:
                     last_movement = obstacle.movements[-1]
-                    self.learner.add_movement_data(i, last_movement)
+                    self.learner.add_movement_data(i, last_movement, self.learning_window_size)
             
-            # Update ambiguity sets
-            self.learner.update_all()
+            # Update ambiguity sets with error handling
+            try:
+                self.learner.update_all()
+            except Exception as e:
+                print(f"Warning: Error in updating ambiguity sets: {e}")
+                # Continue execution without crashing
         
         # Prepare obstacle information for controller
         obstacles_info = []
@@ -162,21 +168,37 @@ class QuadrotorEnvironment:
             })
         
         # Choose relevant part of reference trajectory
-        reference = self.reference_trajectory[min(len(self.state_trajectory)-1, 
-                                               len(self.reference_trajectory)-10):
-                                            min(len(self.state_trajectory)-1+10, 
-                                               len(self.reference_trajectory))]
+        current_idx = min(len(self.state_trajectory)-1, len(self.reference_trajectory)-1)
+        end_idx = min(current_idx + 10, len(self.reference_trajectory))
         
+        # Make sure we have a valid slice of the reference trajectory
+        if current_idx < end_idx:
+            reference = self.reference_trajectory[current_idx:end_idx]
+        else:
+            # Fallback if we're at the end of the reference trajectory
+            reference = self.reference_trajectory[-1:]
+        
+        # Ensure we have enough points for the horizon
         if len(reference) < 10:
-            # Pad with last point if needed
-            padding = [reference[-1] for _ in range(10 - len(reference))]
-            reference = np.vstack([reference, padding])
+            # Pad with the last point if needed
+            last_point = reference[-1] if len(reference) > 0 else self.target
+            padding = np.array([last_point for _ in range(10 - len(reference))])
+            
+            if len(reference) > 0:
+                reference = np.vstack([reference, padding])
+            else:
+                reference = padding
         
         # Get control input from the controller
         if isinstance(self.controller, DistributionallyRobustMPC):
-            control = self.controller.solve_with_obstacles(
-                self.state, reference, obstacles_info
-            )
+            if self.use_sequential_linearization:
+                control = self.controller.solve_sequential_linearization(
+                    self.state, reference, obstacles_info, self.quadrotor
+                )
+            else:
+                control = self.controller.solve_with_obstacles(
+                    self.state, reference, obstacles_info
+                )
         else:
             control = self.controller.solve(
                 self.state, reference
@@ -186,7 +208,9 @@ class QuadrotorEnvironment:
             # Fall back to a simple controller if MPC fails
             direction = self.target - self.state[:3]
             direction = direction / max(np.linalg.norm(direction), 1e-6)
-            control = np.array([direction[0], direction[1], direction[2]]) * 2.0
+            # Create a 4-dimensional control vector compatible with the quadrotor model
+            control = np.array([5.0, direction[0], direction[1], direction[2]])
+            print("Using fallback controller")
             
         # Apply control input
         self.state = self.quadrotor.forward_dynamics(self.state, control)
@@ -202,7 +226,6 @@ class QuadrotorEnvironment:
         
         # Check if reached target
         success = np.linalg.norm(self.state[:3] - self.target) < 1.0
-        done = collision or success
         
         return success, collision
     
