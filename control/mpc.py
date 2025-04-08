@@ -2,15 +2,14 @@ import cvxpy as cvx
 import numpy as np
 
 class MPC:
-    def __init__(self, horizon=10, dt=0.1, quad_radius=0.3):
+    def __init__(self, horizon=8, dt=0.1, quad_radius=0.3):
         self.horizon = horizon
         self.dt = dt
         self.quad_radius = quad_radius
-        self.safety_margin = 0.1
         
         # Cost weights
-        self.w_goal = 5.0
-        self.w_control = 0.1
+        self.w_goal = 10.0
+        self.w_control = 0.05
         self.w_smoothness = 0.3
 
     def optimize_trajectory(self, current_state, goal, obstacles):
@@ -39,7 +38,7 @@ class MPC:
         for t in range(1, self.horizon + 1):
             for obs in obstacles:
                 obs_pos = obs.get_position()
-                min_dist = self.quad_radius + obs.radius + self.safety_margin
+                min_dist = self.quad_radius + obs.radius
                 
                 # Current relative position vector
                 rel_pos = current_state[:2] - obs_pos
