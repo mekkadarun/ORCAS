@@ -1,67 +1,93 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
-import os
+from matplotlib.animation import FuncAnimation
+from motion_models.quadrotor import Quadrotor
+from motion_models.obstacle import Obstacle
+from control.mpc import MPC
 
-import cvxpy as cp
+# Initialize components
+quadrotor = Quadrotor(np.array([0, 0, 0, 0]))
+obstacles = [
+    Obstacle((2, 2), radius=0.2),
+    Obstacle((3, 4), radius=0.2),
+    Obstacle((3, 3), radius=0.2),
+    Obstacle((5, 3), radius=0.2)
+]
+goal = np.array([5, 5])
+# Initialize MPC with quadrotor radius parameter
+mpc = MPC(horizon=10, dt=0.1, quad_radius=0.3)
 
+# Simulation parameters
+actual_trajectory = []
+control_sequence = None
 
-# Add the parent directory to the path to import modules correctly
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Create figure for animation
+fig, ax = plt.subplots(figsize=(8, 8))
+ax.set_xlim(-1, 6)
+ax.set_ylim(-1, 6)
+ax.set_title("Quadrotor Obstacle Avoidance", fontsize=16)
+ax.set_xlabel("X Position (m)")
+ax.set_ylabel("Y Position (m)")
 
-from motion_models.quadrotor import QuadrotorModel
-from control.mpc import MPC, DistributionallyRobustMPC
-from sim.env import QuadrotorEnvironment
+# Plot static elements: obstacles and goal
+for obs in obstacles:
+    circle = plt.Circle(obs.get_position(), obs.radius, color='red', alpha=0.7)
+    ax.add_patch(circle)
+goal_marker = ax.scatter(*goal, s=200, c='green', marker='*', label='Goal')
 
-def test_standard_dr_mpc():
-    """Test the standard distributionally robust MPC controller."""
-    # Create environment
-    env = QuadrotorEnvironment(dt=0.1, enable_learning=True)
-    
-    # Define system matrices for linear model
-    n_states = 12
-    n_controls = 4
-    n_outputs = 3
-    
-    dt = 0.1
-    A = np.eye(n_states)
-    A[0, 3] = A[1, 4] = A[2, 5] = dt
-    A[6, 9] = A[7, 10] = A[8, 11] = dt
-    
-    B = np.zeros((n_states, n_controls))
-    B[5, 0] = dt
-    B[9, 1] = dt
-    B[10, 2] = dt
-    B[11, 3] = dt
-    
-    C = np.zeros((n_outputs, n_states))
-    C[0, 0] = C[1, 1] = C[2, 2] = 1
-    
-    Q = np.diag([10.0, 10.0, 10.0])
-    R = np.diag([0.1, 0.1, 0.1, 0.1])
-    
-    horizon = 10
-    
-    # Create Distributionally Robust MPC controller
-    dr_mpc = DistributionallyRobustMPC(A, B, C, Q, R, horizon=horizon, alpha=0.95)
-    
-    # Set controller
-    env.set_controller(dr_mpc)
-    
-    # Run simulation
-    print("\nRunning simulation with Distributionally Robust MPC...")
-    results = env.run_simulation(max_steps=200)
-    
-    # Visualize results
-    env.visualize(block=True)
-    
-    # Print summary
-    print("\nSummary:")
-    print(f"DR-MPC: {'Success' if results['success'] else 'Failed'}, " +
-          f"{'Collision' if results['collision'] else 'No collision'}, " +
-          f"Steps: {results['steps']}")
-    
-    return results
+# Dynamic elements: quadrotor and trajectory
+quad_marker, = ax.plot([], [], 'o', color='orange', markersize=10, label='Quadrotor')
+trajectory_line, = ax.plot([], [], '--', color='blue', label='Trajectory')
 
-if __name__ == "__main__":
-    test_standard_dr_mpc()
+# Initialize animation function
+def init():
+    quad_marker.set_data([], [])
+    trajectory_line.set_data([], [])
+    return quad_marker, trajectory_line
+
+# Animation update function
+def update(frame):
+    global control_sequence
+    
+    # Get current state and add to trajectory
+    current_state = quadrotor.get_state()
+    actual_trajectory.append(current_state[:2].copy())
+    
+    # Check if goal is reached
+    if np.linalg.norm(current_state[:2] - goal) < 0.1:
+        print(f"Goal reached at frame {frame}!")
+        ani.event_source.stop()
+        return quad_marker, trajectory_line
+    
+    # Optimize trajectory and apply first control input
+    control_sequence = mpc.optimize_trajectory(current_state, goal, obstacles)
+    quadrotor.update_state(control_sequence[0], mpc.dt)
+    
+    # Update dynamic elements in the plot
+    quad_marker.set_data([current_state[0]], [current_state[1]])
+
+    trajectory = np.array(actual_trajectory)
+    if len(trajectory) > 0:
+        trajectory_line.set_data(trajectory[:, 0], trajectory[:, 1])
+    else:
+        trajectory_line.set_data([], [])
+    
+    return quad_marker, trajectory_line
+
+# Create animation
+ani = FuncAnimation(
+    fig,
+    update,
+    frames=100,
+    init_func=init,
+    blit=True,
+    interval=100  # Frame interval in milliseconds (100ms → 10 FPS)
+)
+
+# Show animation
+plt.legend()
+plt.show()
