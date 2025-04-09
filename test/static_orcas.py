@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from motion_models.quadrotor import Quadrotor
-from motion_models.obstacle import Obstacle
+from motion_models.static_obstacle import Obstacle
 from control.mpc import MPC
 
 # Initialize components
