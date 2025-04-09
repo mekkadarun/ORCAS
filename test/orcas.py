@@ -13,7 +13,7 @@ from control.mpc import MPC
 quadrotor = Quadrotor(np.array([0, 0, 0, 0]))
 obstacles = [
     Obstacle((2, 2), radius=0.1),
-    Obstacle((3, 4), radius=0.15),
+    Obstacle((4, 4), radius=0.25),
     Obstacle((3, 3), radius=0.35),
     Obstacle((5, 3), radius=0.05)
 ]
