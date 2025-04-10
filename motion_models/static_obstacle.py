@@ -6,7 +6,7 @@ class Obstacle:
         self.radius = radius
         
     def get_position(self):
-        return self.position
+        return self.position.copy()
         
     def get_constraint_parameters(self):
         """Return parameters needed for collision avoidance constraint"""
