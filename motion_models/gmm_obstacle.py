@@ -1,10 +1,12 @@
 import numpy as np
 from sklearn.mixture import GaussianMixture
+from control.ambiguity_set import AmbiguitySet
 
 class GMMObstacle:
-    def __init__(self, position, radius=0.5, n_components=3, random_state=42):
+    def __init__(self, position, radius=0.5, n_components=4, random_state=30):
         """
-        Initialize a Gaussian Mixture Model-based obstacle
+        Initialize a Gaussian Mixture Model-based obstacle with a
+        distributionally robust representation using ambiguity sets
         
         Args:
             position: Initial position of the obstacle (x, y)
@@ -17,26 +19,35 @@ class GMMObstacle:
         self.n_components = n_components
         self.random_state = random_state
         
-        # Initialize GMM model
+        # Initialize GMM model with stability settings
         self.gmm = GaussianMixture(
             n_components=n_components,
             covariance_type='full',
-            random_state=random_state
+            random_state=random_state,
+            reg_covar=1e-6  # Add regularization for numerical stability
         )
         
-        # Store movement history for fitting GMM
+        # Movement history for online learning
         self.movement_history = []
         
-        # Placeholder for latest sampled movement
+        # Latest sampled movement
         self.latest_movement = np.zeros(2)
         
+        # Initialize ambiguity set for distributionally robust approach
+        # This implements the paper's ambiguity set concept
+        self.ambiguity_set = AmbiguitySet(
+            max_components=n_components,
+            confidence_level=0.95,
+            regularization=1e-6
+        )
+    
     def get_position(self):
         """Return current position of the obstacle"""
         return self.position.copy()
     
     def update_position(self, dt, use_gmm=True):
         """
-        Update position based on GMM prediction or noise if not enough data
+        Update position based on GMM prediction using online learning
         
         Args:
             dt: Time step
@@ -54,20 +65,30 @@ class GMMObstacle:
         # Update position
         self.position += movement
         
-        # Record this movement for future GMM fitting
-        self.movement_history.append(movement / dt)  # Store normalized movement
+        # Record movement for future GMM fitting
+        movement_vector = movement / dt  # Store normalized movement
+        self.movement_history.append(movement_vector)
         
-        # Refit GMM when we have enough new data points
+        # Update ambiguity set with new movement data
+        # This is key for the online learning aspect from the paper
+        self.ambiguity_set.add_movement_data(movement_vector)
+        
+        # Refit GMM and update ambiguity set periodically
         if len(self.movement_history) % 5 == 0 and len(self.movement_history) >= 10:
             self._fit_gmm()
+            self.ambiguity_set.update_mixture_model()
     
     def _fit_gmm(self):
-        """Fit GMM to movement history with stability improvements"""
+        """
+        Fit GMM to movement history with stability improvements.
+        Implements robust fitting as suggested in the paper.
+        """
         if len(self.movement_history) < 10:
             return
             
         # Convert movement history to numpy array
-        movement_data = np.array(self.movement_history[-50:])  # Use more data points for better modeling
+        # Use more recent data points for better online learning
+        movement_data = np.array(self.movement_history[-50:])
         
         # Handle degenerate cases
         if np.all(np.std(movement_data, axis=0) < 1e-6):
@@ -79,18 +100,18 @@ class GMMObstacle:
             )
             self.gmm.means_ = np.array([np.mean(movement_data, axis=0)])
             self.gmm.covariances_ = np.array([np.diag([max(0.01, np.var(movement_data[:, 0])), 
-                                                       max(0.01, np.var(movement_data[:, 1]))])])
+                                                     max(0.01, np.var(movement_data[:, 1]))])])
             self.gmm.weights_ = np.array([1.0])
             return
         
         try:
-            # Try to fit GMM with increasing regularization until successful
+            # Attempt fitting with increasing regularization for stability
             regularization = 1e-6
             max_attempts = 5
             
             for attempt in range(max_attempts):
                 try:
-                    # Initialize with k-means to improve stability
+                    # Initialize with k-means for better stability
                     self.gmm = GaussianMixture(
                         n_components=self.n_components,
                         covariance_type='full',
@@ -101,21 +122,24 @@ class GMMObstacle:
                     )
                     self.gmm.fit(movement_data)
                     
-                    # Check if fit was successful
+                    # Check fit success
                     if np.any(np.isnan(self.gmm.means_)) or np.any(np.isnan(self.gmm.covariances_)):
                         raise ValueError("NaN values in fitted GMM")
                         
-                    # Check for small weights and merge components if needed
+                    # Merge small weight components if needed
                     small_idx = np.where(self.gmm.weights_ < 0.05)[0]
                     if len(small_idx) > 0:
                         self._merge_small_components(small_idx)
+                        
+                    # Update ambiguity set to maintain consistency
+                    self.ambiguity_set.movement_history = self.movement_history.copy()
                         
                     return
                 except Exception as e:
                     regularization *= 10
                     print(f"GMM fitting attempt {attempt+1} failed, increasing regularization to {regularization}")
                     
-            # If all attempts failed, use a simple single-component model
+            # Fallback to simple model if all attempts fail
             self.gmm = GaussianMixture(
                 n_components=1,
                 covariance_type='full',
@@ -127,7 +151,7 @@ class GMMObstacle:
             
         except Exception as e:
             print(f"GMM fitting failed: {e}, using fallback model")
-            # Fallback to a simple model
+            # Fallback model
             self.gmm = GaussianMixture(
                 n_components=1,
                 covariance_type='full',
@@ -157,28 +181,32 @@ class GMMObstacle:
         self.gmm.covariances_ = self.gmm.covariances_[keep_idx]
         self.gmm.weights_ = new_weights
         
-        # Update number of components
+        # Update component count
         self.n_components = len(keep_idx)
     
     def _sample_from_gmm(self):
         """Sample a movement vector from the GMM"""
-        sample = self.gmm.sample(1)[0][0]
-        return sample
+        try:
+            sample = self.gmm.sample(1)[0][0]
+            return sample
+        except:
+            # Fallback for sampling failures
+            return np.random.normal(0, 0.1, 2)
     
     def get_uncertainty_ellipses(self, time_horizon=10, time_step=0.1):
         """
-        Get prediction ellipses for a time horizon
+        Get prediction ellipses for a time horizon based on ambiguity set
         
         Args:
             time_horizon: Number of time steps to predict
             time_step: Size of each time step
             
         Returns:
-            List of dictionaries containing mean and covariance for each component
+            List of dictionaries containing mean and covariance for components
             at each time step
         """
         if len(self.movement_history) < 10:
-            # Return a simple circular uncertainty if not enough data
+            # Simple circular uncertainty if insufficient data
             uncertainty = []
             for t in range(1, time_horizon + 1):
                 # Increasing radius with time
@@ -189,7 +217,29 @@ class GMMObstacle:
                 })
             return uncertainty
         
-        # Get components from the GMM
+        # Use ambiguity set for uncertainty (preferred approach)
+        if hasattr(self.ambiguity_set, 'ambiguity_params') and self.ambiguity_set.ambiguity_params is not None:
+            uncertainty = []
+            for t in range(1, time_horizon + 1):
+                time_uncertainty = self.ambiguity_set.get_uncertainty(t-1)
+                if time_uncertainty is not None:
+                    # Transform means to be relative to current position
+                    time_uncertainty_transformed = {
+                        'means': [self.position + mean * t * time_step for mean in time_uncertainty['means']],
+                        'covariances': time_uncertainty['covariances'],
+                        'weights': time_uncertainty['weights']
+                    }
+                    uncertainty.append(time_uncertainty_transformed)
+                else:
+                    # Fallback for missing uncertainty data
+                    uncertainty.append({
+                        'means': [self.position + self.latest_movement * t * time_step],
+                        'covariances': [np.eye(2) * (0.1 * t * time_step)**2],
+                        'weights': [1.0]
+                    })
+            return uncertainty
+        
+        # Fallback to GMM if ambiguity set is unavailable
         means = self.gmm.means_
         covariances = self.gmm.covariances_
         weights = self.gmm.weights_
@@ -197,19 +247,16 @@ class GMMObstacle:
         # Create uncertainty ellipses for each time step
         uncertainty = []
         for t in range(1, time_horizon + 1):
-            # Compute predicted means by adding scaled movement trends to current position
-            # This keeps means relative to the current position
+            # Calculate predicted positions by scaling movement trends
             scaled_means = []
             
             for mean in means:
-                # Mean represents likely movement direction/speed
-                # Scale it by time and add to current position
+                # Scale movement by time and add to current position
                 prediction = self.position + mean * t * time_step
                 scaled_means.append(prediction)
             
-            # Scale covariances with time (uncertainty grows with prediction time)
-            # Use a lower scaling factor to reduce conservatism
-            time_scale = np.sqrt(t * time_step)  # Square root scaling instead of quadratic
+            # Scale covariances with time using paper's approach
+            time_scale = np.sqrt(t * time_step)  # Square root scaling
             scaled_covs = [cov * time_scale for cov in covariances]
             
             uncertainty.append({
