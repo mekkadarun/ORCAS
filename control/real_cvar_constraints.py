@@ -6,12 +6,12 @@ class CVaRObstacleAvoidance:
     def __init__(self, confidence_level=0.95, safety_margin=0.1):
         self.confidence_level = confidence_level
         self.safety_margin = safety_margin
-        self.chi2_val = chi2.ppf(confidence_level, df=2)
+        self.chi2_val = chi2.ppf(confidence_level, df=3)  # Changed to df=3 for full 3D
     
     def calculate_cvar_constraint(self, pos_var, obstacle, t, min_dist):
         """
         Calculate collision avoidance constraints using distributionally robust approach.
-        Implements the key formulation from the paper's Theorem 1.
+        Now properly supports 3D positions and obstacles.
         
         Args:
             pos_var: Position variable (from optimization)
@@ -26,13 +26,17 @@ class CVaRObstacleAvoidance:
         params = obstacle.get_constraint_parameters()
         center = params['center']
         
-        # Handle dimension differences
-        if pos_var.shape[0] != center.shape[0]:
-            # If dimensions don't match, only use x-y coordinates
-            if pos_var.shape[0] > center.shape[0]:
-                pos_var_adj = pos_var[:center.shape[0]]
+        # Handle dimension differences consistently
+        pos_dim = pos_var.shape[0]
+        center_dim = center.shape[0]
+        
+        if pos_dim != center_dim:
+            if pos_dim > center_dim:
+                # If position has higher dimension, truncate to match obstacle
+                pos_var_adj = pos_var[:center_dim]
             else:
-                center_adj = center[:pos_var.shape[0]]
+                # If obstacle has higher dimension, truncate to match position
+                center_adj = center[:pos_dim]
                 center = center_adj
         else:
             pos_var_adj = pos_var
@@ -44,11 +48,16 @@ class CVaRObstacleAvoidance:
         
         # Early return if no uncertainty data
         uncertainty_idx = min(t-1, len(params['uncertainty'])-1)
-        if uncertainty_idx < 0:
+        if uncertainty_idx < 0 or 'uncertainty' not in params:
             return constraints
         
         # Get uncertainty for current prediction time
         uncertainty = params['uncertainty'][uncertainty_idx]
+        
+        # Skip if no uncertainty data available
+        if not uncertainty or 'means' not in uncertainty:
+            return constraints
+            
         means = uncertainty['means']
         covariances = uncertainty['covariances']
         weights = uncertainty['weights']
@@ -57,13 +66,26 @@ class CVaRObstacleAvoidance:
         for j, (mean, cov, weight) in enumerate(zip(means, covariances, weights)):
             if weight < 0.05:  # Skip negligible components
                 continue
+            
+            # Match dimensionality between mean and position variable
+            if len(mean) != pos_dim:
+                if len(mean) > pos_dim:
+                    mean_adj = mean[:pos_dim]
+                    mean = mean_adj
+                    
+                    # Also adjust covariance matrix
+                    cov_adj = cov[:pos_dim, :pos_dim]
+                    cov = cov_adj
+                else:
+                    # Skip if dimensions can't be reconciled
+                    continue
                 
             # Regularize covariance for numerical stability
-            reg_cov = cov + np.eye(2) * 1e-6
+            reg_cov = cov + np.eye(len(cov)) * 1e-6
             
             try:
                 # Current position of obstacle
-                curr_pos = np.array(center)
+                curr_pos = np.array(center)[:pos_dim]  # Ensure matching dimensions
                 
                 # Vector from predicted mean to position
                 vec_to_robot = curr_pos - mean
@@ -105,10 +127,10 @@ class CVaRObstacleAvoidance:
     def calculate_risk(self, position, obstacle):
         """
         Calculate distributionally robust risk of collision with an obstacle.
-        Implements the risk assessment approach from the paper.
+        Fully compatible with both 2D and 3D obstacles and positions.
         
         Args:
-            position: Current or test position
+            position: Current or test position (2D or 3D)
             obstacle: Obstacle with ambiguity set
             
         Returns:
@@ -116,17 +138,21 @@ class CVaRObstacleAvoidance:
         """
         params = obstacle.get_constraint_parameters()
         center = params['center']
-        risk = 0.0
         
-        # Handle dimensionality differences
-        if len(position) != len(center):
-            if len(position) > len(center):
-                # If position is 3D but obstacle is 2D, use only x-y coordinates
-                position_adj = position[:len(center)]
+        # Handle dimensionality differences properly
+        pos_dim = len(position)
+        center_dim = len(center)
+        
+        if pos_dim != center_dim:
+            if pos_dim > center_dim:
+                # If position is higher dimension (e.g., 3D) but obstacle is lower (e.g., 2D)
+                # Use only matching coordinates
+                position_adj = position[:center_dim]
                 dist = np.linalg.norm(position_adj - center)
             else:
-                # If position is 2D but obstacle is 3D, use only x-y coordinates of obstacle
-                center_adj = center[:len(position)]
+                # If position is lower dimension but obstacle is higher
+                # Use only matching coordinates of obstacle
+                center_adj = center[:pos_dim]
                 dist = np.linalg.norm(position - center_adj)
         else:
             # Same dimensionality, direct comparison
@@ -145,30 +171,46 @@ class CVaRObstacleAvoidance:
         if 'uncertainty' in params and len(params['uncertainty']) > 0:
             uncertainty = params['uncertainty'][0]  # First time step prediction
             
+            # Handle case where uncertainty data is incomplete
+            if not uncertainty or 'means' not in uncertainty:
+                return risk
+                
             # Consider each mixture component
-            for mean, cov, weight in zip(uncertainty['means'], 
-                                         uncertainty['covariances'],
-                                         uncertainty['weights']):
+            for mean, cov, weight in zip(
+                uncertainty.get('means', []), 
+                uncertainty.get('covariances', []),
+                uncertainty.get('weights', [])
+            ):
                 if weight < 0.05:  # Skip negligible components
                     continue
                 
                 # Handle dimensionality differences for mean
-                if len(position) != len(mean):
-                    if len(position) > len(mean):
-                        # Use only the x-y coordinates of position
-                        position_adj = position[:len(mean)]
+                mean_dim = len(mean)
+                if pos_dim != mean_dim:
+                    if pos_dim > mean_dim:
+                        # Use only the matching coordinates of position
+                        position_adj = position[:mean_dim]
                         comp_dist = np.linalg.norm(position_adj - mean)
                     else:
-                        # Use only the x-y coordinates of mean
-                        mean_adj = mean[:len(position)]
+                        # Use only the matching coordinates of mean
+                        mean_adj = mean[:pos_dim]
                         comp_dist = np.linalg.norm(position - mean_adj)
                 else:
                     # Same dimensionality, direct comparison
                     comp_dist = np.linalg.norm(position - mean)
                 
                 try:
+                    # Match cov dimensions to handle properly
+                    if len(cov) > pos_dim:
+                        cov_adj = cov[:pos_dim, :pos_dim]
+                    elif len(cov) < pos_dim:
+                        # Skip if cov is too small
+                        continue
+                    else:
+                        cov_adj = cov
+                        
                     # Calculate risk based on uncertainty model
-                    eigvals = np.linalg.eigvalsh(cov)
+                    eigvals = np.linalg.eigvalsh(cov_adj)
                     max_std = np.sqrt(max(eigvals))
                     
                     # Exponential risk model from paper
@@ -177,7 +219,7 @@ class CVaRObstacleAvoidance:
                     # Combine risks with proper weighting
                     risk = risk + comp_risk * (1.0 - risk)
                     
-                except np.linalg.LinAlgError:
+                except (np.linalg.LinAlgError, ValueError) as e:
                     # Fallback risk calculation
                     comp_risk = weight * (min_safe_dist / max(comp_dist, min_safe_dist)) ** 2
                     risk = max(risk, comp_risk)
@@ -187,14 +229,18 @@ class CVaRObstacleAvoidance:
     def calculate_total_risk(self, position, obstacles):
         """
         Calculate total risk from all obstacles using distributionally robust approach.
+        Works with both 2D and 3D positions and obstacles.
         
         Args:
-            position: Current or test position
-            obstacles: List of obstacles
+            position: Current or test position (2D or 3D)
+            obstacles: List of obstacles (2D or 3D)
             
         Returns:
             Combined risk value between 0 and 1
         """
+        if not obstacles:
+            return 0.0
+            
         total_risk = 0.0
         
         # Calculate risk from each obstacle
@@ -229,7 +275,21 @@ class CVaRObstacleAvoidance:
         # Calculate risk at each point using the distributionally robust approach
         for i in range(X.shape[0]):
             for j in range(X.shape[1]):
-                position = np.array([X[i, j], Y[i, j]])
+                # Use average z-height from obstacles for risk calculation in 3D
+                z_height = 0.0
+                count = 0
+                for obs in obstacles:
+                    if len(obs.get_position()) > 2:  # Check if obstacle is 3D
+                        z_height += obs.get_position()[2]
+                        count += 1
+                
+                if count > 0:
+                    z_height /= count
+                    # Create a 3D position with estimated z-height
+                    position = np.array([X[i, j], Y[i, j], z_height])
+                else:
+                    position = np.array([X[i, j], Y[i, j]])
+                    
                 risk_map[i, j] = self.calculate_total_risk(position, obstacles)
                 
         return risk_map, X, Y
