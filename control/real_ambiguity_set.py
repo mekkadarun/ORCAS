@@ -5,11 +5,7 @@ from scipy.stats import chi2
 class AmbiguitySet:
     """
     Implementation of a data-stream-driven ambiguity set for distributionally
-    robust collision avoidance with moving obstacles, based on the paper
-    "Online-Learning-Based Distributionally Robust Motion Control with Collision
-    Avoidance for Mobile Robots".
-    
-    Enhanced for full 3D support.
+    robust collision avoidance with moving obstacles
     """
     
     def __init__(self, max_components=5, confidence_level=0.90, regularization=1e-6):
@@ -21,9 +17,9 @@ class AmbiguitySet:
         self.mixture_model = None
         self.ambiguity_params = None
         
-        # Parameters for the DPMM ambiguity set as described in the paper
+        # Parameters for the DPMM ambiguity set
         self.basic_ambiguity_sets = []
-        self.gamma_weights = []  # Mixing weights (γ in the paper's equation 10)
+        self.gamma_weights = []  # Mixing weights
     
     def add_movement_data(self, movement):
         """Add new movement observation to history."""
@@ -92,8 +88,6 @@ class AmbiguitySet:
     def update_ambiguity_set(self):
         """
         Construct the ambiguity set based on the fitted mixture model.
-        This implements equation (10) from the paper to create a
-        Minkowski sum of basic ambiguity sets.
         """
         if self.mixture_model is None:
             return False
@@ -126,7 +120,6 @@ class AmbiguitySet:
                 continue
                 
             # Each basic ambiguity set defined by mean and covariance
-            # This follows equation (10) in the paper
             basic_set = {
                 'mean': means[j],
                 'covariance': reg_covs[j],
@@ -147,8 +140,6 @@ class AmbiguitySet:
     def get_uncertainty(self, time_index=0):
         """
         Get uncertainty parameters for a specific prediction time.
-        This implements the time-varying ambiguity set described in the paper.
-        Now properly handles 3D data.
         """
         if self.ambiguity_params is None:
             return None

@@ -6,11 +6,12 @@ class RealCVaRGMMMPC_3D:
     """
     3D-optimized MPC controller using CVaR for risk assessment
     """
-    def __init__(self, horizon=8, dt=0.1, quad_radius=0.3, confidence_level=0.95):
+    def __init__(self, horizon=8, dt=0.1, quad_radius=0.3, confidence_level=0.95, safety_margin=0.6):
         self.horizon = horizon
         self.dt = dt
         self.quad_radius = quad_radius
         self.confidence_level = confidence_level
+        self.safety_margin = safety_margin
         
         # Safety margin for collision avoidance
         self.safety_margin = 0.6  # Margin for 3D environment

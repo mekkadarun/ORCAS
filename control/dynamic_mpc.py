@@ -71,7 +71,6 @@ class DynamicMPC:
         
         # Solve problem
         prob = cvx.Problem(objective, constraints)
-        # prob.solve(solver=cvx.ECOS, verbose=False)
         prob.solve(
                     solver=cvx.ECOS,
                     verbose=False,

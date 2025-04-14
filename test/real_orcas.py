@@ -179,7 +179,7 @@ def run_simulation():
     # Obstacle trajectories 
     obs_traj_lines = []
     for i in range(len(obstacles)):
-        line, = ax2.plot([], [], [], ':', color=f'C{i+1}', label=f'Obstacle {i+1} Trajectory', alpha=0.6, zorder=4)
+        line, = ax2.plot([], [], [], alpha=0.6, zorder=4)
         obs_traj_lines.append(line)
 
     # Status text display
@@ -448,19 +448,7 @@ def run_simulation():
     ax1.legend(loc='upper left')
     ax2.legend(loc='upper left')
     
-    # Add text box with explanation
-    textstr = '\n'.join((
-        '3D Motion Control:',
-        '- Full 3D obstacle avoidance',
-        '- Proper altitude control',
-        '- 3D quadrotor dynamics',
-        '- CVaR-based risk assessment',
-        '- Uses realistic physics model',
-    ))
-
-    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    ax2.text2D(0.05, 0.7, textstr, transform=ax2.transAxes, fontsize=10,
-            verticalalignment='top', bbox=props)
+   
     
     # Add title with paper reference
     fig.text(0.5, 0.01, "3D Implementation of 'Online-Learning-Based Distributionally Robust Motion Control'", 
