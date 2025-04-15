@@ -56,6 +56,9 @@ class RealCVaRGMMMPC_3D:
         Returns:
             Optimal control inputs for the horizon
         """
+        for obs in obstacles:
+            if hasattr(obs, 'set_confidence_level'):
+                obs.set_confidence_level(self.confidence_level)
         # Using safe direction approach for simplicity and reliability
         return self.compute_safe_direction_3d(current_state, goal, obstacles)
         

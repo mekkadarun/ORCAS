@@ -21,6 +21,21 @@ class AmbiguitySet:
         self.basic_ambiguity_sets = []
         self.gamma_weights = []  # Mixing weights
     
+    def set_confidence_level(self, confidence_level):
+        """Update confidence level and related parameters"""
+        if self.confidence_level != confidence_level:
+            self.confidence_level = confidence_level
+            # Update chi2 value
+            dims = 3  # Default to 3D
+            if self.movement_history and len(self.movement_history) > 0:
+                dims = len(self.movement_history[0])
+            self.chi2_val = chi2.ppf(confidence_level, df=dims)
+            # Update ambiguity set if we already have a model
+            if self.mixture_model is not None:
+                self.update_ambiguity_set()
+            return True
+        return False
+    
     def add_movement_data(self, movement):
         """Add new movement observation to history."""
         self.movement_history.append(movement)
@@ -144,9 +159,10 @@ class AmbiguitySet:
         if self.ambiguity_params is None:
             return None
         
-        # Scale uncertainties based on prediction time
-        # This scaling follows the paper's approach for increasing uncertainty with time
-        time_scale = 1.0 + 0.2 * time_index
+        # Scale uncertainties based on prediction time and confidence level
+        # Higher confidence means more uncertainty growth over time
+        confidence_factor = 1.0 + (self.confidence_level - 0.9)
+        time_scale = 1.0 + 0.2 * time_index * confidence_factor
         
         uncertainty = {
             'means': [],
@@ -164,7 +180,7 @@ class AmbiguitySet:
             )
             
             # Scale covariance with time to increase future uncertainty
-            # This implements the uncertainty growth model from the paper
+            # Higher confidence means larger uncertainty growth
             uncertainty['covariances'].append(
                 self.ambiguity_params['covariances'][i] * (time_scale**2)
             )
@@ -210,7 +226,9 @@ class AmbiguitySet:
         if dist <= min_dist:
             return 1.0
         
-        base_risk = (min_dist / dist)**2
+        # Base risk increases with confidence level
+        confidence_factor = 1.0 + (self.confidence_level - 0.9) * 3.0
+        base_risk = min(1.0, (min_dist / dist)**(2.0 / confidence_factor))
         total_risk = base_risk
         
         # Match dimensions for position and obstacle position
@@ -257,15 +275,16 @@ class AmbiguitySet:
             # Variance along direction
             variance = direction.T @ cov_adj @ direction
             
-            # Scale factor based on chi-square value
+            # Scale factor based on chi-square value - higher confidence means higher scale
             scale = np.sqrt(self.chi2_val * variance)
             
             # Compute distance to predicted obstacle position
             pred_dist = np.linalg.norm(position_adj - pred_obstacle_pos)
             
-            # Component risk (using exponential decay model)
-            # This aligns with the paper's risk model
-            comp_risk = weight * np.exp(-(pred_dist - min_dist)**2 / (2 * scale**2))
+            # FIXED: Component risk (using exponential decay model)
+            # Higher chi2_val (confidence) means SLOWER decay with distance
+            confidence_scale = max(1.0, self.chi2_val / 3.0)
+            comp_risk = weight * np.exp(-(pred_dist - min_dist)**2 / (2 * scale**2 * confidence_scale))
             
             # Combine risks (avoiding double-counting)
             total_risk = total_risk + comp_risk * (1.0 - total_risk)

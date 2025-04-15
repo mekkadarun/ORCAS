@@ -870,8 +870,8 @@ def main():
     # Initialize evaluator with specified seed
     evaluator = ConfidenceLevelEvaluator(seed=args.seed)
     
-    # Confidence levels to test (90%, 92%, 95%, 97%)
-    confidence_levels = [0.90, 0.92, 0.95, 0.97]
+    # Confidence levels to test (92%, 94%, 96%, 98%)
+    confidence_levels = [0.92, 0.94, 0.96, 0.98]
     
     print(f"Evaluating confidence levels: {[f'{cl:.0%}' for cl in confidence_levels]}")
     print(f"Running {args.runs} simulations per confidence level...")

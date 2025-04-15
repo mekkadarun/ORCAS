@@ -3,7 +3,7 @@ import numpy as np
 from control.cvar_constraints import CVaRObstacleAvoidance
 
 class CVaRGMMMPC:
-    def __init__(self, horizon=10, dt=0.1, quad_radius=0.3, confidence_level=0.97):
+    def __init__(self, horizon=10, dt=0.1, quad_radius=0.3, confidence_level=0.90):
         self.horizon = horizon
         self.dt = dt
         self.quad_radius = quad_radius

@@ -3,7 +3,7 @@ import cvxpy as cvx
 from scipy.stats import chi2
 
 class CVaRObstacleAvoidance:
-    def __init__(self, confidence_level=0.95, safety_margin=0.1):
+    def __init__(self, confidence_level=0.90, safety_margin=0.1):
         self.confidence_level = confidence_level
         self.safety_margin = safety_margin
         self.chi2_val = chi2.ppf(confidence_level, df=2)

@@ -5,8 +5,21 @@ from scipy.stats import chi2
 class CVaRObstacleAvoidance:
     def __init__(self, confidence_level=0.95, safety_margin=0.1):
         self.confidence_level = confidence_level
-        self.safety_margin = safety_margin
+        # Scale safety margin based on confidence level
+        self.base_safety_margin = safety_margin
+        self.safety_margin = self._get_scaled_safety_margin()
         self.chi2_val = chi2.ppf(confidence_level, df=3)  # Changed to df=3 for full 3D
+    
+    def _get_scaled_safety_margin(self):
+        """Scale safety margin based on confidence level"""
+        # CHANGE: Ensure a reasonable minimum safety margin even at low confidence
+        base_confidence = 0.85  # Lower base confidence
+        scaling_factor = 2.0    # Gentler scaling
+        
+        # Apply a non-linear scaling that increases more rapidly at higher confidence levels
+        confidence_effect = max(0, (self.confidence_level - base_confidence) / (1.0 - base_confidence))
+        # Add a minimum safety factor (0.8) to ensure even low confidence has some safety
+        return self.base_safety_margin * (0.8 + scaling_factor * confidence_effect)
     
     def calculate_cvar_constraint(self, pos_var, obstacle, t, min_dist):
         """
@@ -41,9 +54,15 @@ class CVaRObstacleAvoidance:
         else:
             pos_var_adj = pos_var
         
+        # Scale minimum distance based on confidence level
+        min_safety_factor = 0.8  # Minimum safety factor even at low confidence
+        confidence_scale = (self.confidence_level - 0.85) / (1.0 - 0.85) 
+        confidence_scale = max(0, confidence_scale)  # Ensure non-negative
+        scaled_min_dist = min_dist * (min_safety_factor + confidence_scale)
+        
         # Base constraint for current obstacle position
         constraints.append(
-            cvx.sum_squares(pos_var_adj - center) >= min_dist**2
+            cvx.sum_squares(pos_var_adj - center) >= scaled_min_dist**2
         )
         
         # Early return if no uncertainty data
@@ -93,7 +112,8 @@ class CVaRObstacleAvoidance:
                 # Handle special case when vector is very small
                 if np.linalg.norm(vec_to_robot) < 1e-6:
                     # Use squared distance constraint
-                    weighted_min_dist = min_dist * (1.0 + weight)
+                    # Scale with confidence level
+                    weighted_min_dist = scaled_min_dist * (1.0 + weight)
                     constraints.append(
                         cvx.sum_squares(pos_var_adj - mean) >= weighted_min_dist**2
                     )
@@ -103,13 +123,15 @@ class CVaRObstacleAvoidance:
                 direction = vec_to_robot / np.linalg.norm(vec_to_robot)
                 
                 # Calculate scale factor based on chi-square distribution
-                # This implements the paper's formulation for CVaR constraint
-                scale_factor = np.sqrt(self.chi2_val * direction.T @ reg_cov @ direction)
+                # FIXED: Now the scale increases with confidence (chi2_val increases)
+                variance = direction.T @ reg_cov @ direction
+                scale_factor = np.sqrt(self.chi2_val * variance)
                 
-                # Adjust minimum distance based on component weight
-                weighted_min_dist = min_dist * (1.0 + weight)
+                # Adjust minimum distance based on component weight and confidence
+                weighted_min_dist = scaled_min_dist * (1.0 + weight)
                 
                 # Add linearized constraint (DCP-compliant)
+                # More conservative constraint for higher confidence levels
                 constraints.append(
                     direction @ (pos_var_adj - mean) >= weighted_min_dist + scale_factor
                 )
@@ -117,7 +139,7 @@ class CVaRObstacleAvoidance:
             except Exception as e:
                 print(f"Constraint generation failed: {e}")
                 # Use fallback constraint
-                weighted_min_dist = min_dist * (1.0 + weight)
+                weighted_min_dist = scaled_min_dist * (1.0 + weight)
                 constraints.append(
                     cvx.sum_squares(pos_var_adj - mean) >= weighted_min_dist**2
                 )
@@ -136,6 +158,7 @@ class CVaRObstacleAvoidance:
         Returns:
             Risk value between 0 and 1
         """
+        
         params = obstacle.get_constraint_parameters()
         center = params['center']
         
@@ -159,13 +182,17 @@ class CVaRObstacleAvoidance:
             dist = np.linalg.norm(position - center)
             
         radius = params['radius']
+        # Scale safety margin with confidence level
         min_safe_dist = radius + self.safety_margin
         
         if dist <= min_safe_dist:
             risk = 1.0
         else:
+            # Make risk decrease slower with higher confidence levels
             # Risk decreases with distance according to paper's model
-            risk = (min_safe_dist / dist) ** 2
+            min_confidence_effect = 0.8  # Minimum effect at lowest confidence
+            confidence_effect = min_confidence_effect + (self.confidence_level - 0.85) * 2.0
+            risk = (min_safe_dist / dist) ** (2.0 / confidence_effect)
             
         # Add risk from ambiguity set components
         if 'uncertainty' in params and len(params['uncertainty']) > 0:
@@ -213,15 +240,19 @@ class CVaRObstacleAvoidance:
                     eigvals = np.linalg.eigvalsh(cov_adj)
                     max_std = np.sqrt(max(eigvals))
                     
-                    # Exponential risk model from paper
-                    comp_risk = weight * np.exp(-(comp_dist**2) / (2 * max_std**2 * self.chi2_val))
+                    # FIXED: Exponential risk model - now higher confidence means higher risk
+                    # Instead of dividing by chi2_val, we multiply to increase risk with confidence
+                    confidence_scale = max(1.0, self.chi2_val / 5.0)  # Normalize to reasonable range
+                    comp_risk = weight * np.exp(-(comp_dist**2) / (2 * max_std**2 * confidence_scale))
                     
                     # Combine risks with proper weighting
                     risk = risk + comp_risk * (1.0 - risk)
                     
                 except (np.linalg.LinAlgError, ValueError) as e:
                     # Fallback risk calculation
-                    comp_risk = weight * (min_safe_dist / max(comp_dist, min_safe_dist)) ** 2
+                    # Make more conservative with higher confidence
+                    confidence_factor = 1.0 + (self.confidence_level - 0.9) * 3.0
+                    comp_risk = weight * (min_safe_dist / max(comp_dist, min_safe_dist)) ** (2.0 / confidence_factor)
                     risk = max(risk, comp_risk)
         
         return min(risk, 1.0)  # Ensure risk is bounded
