@@ -18,7 +18,6 @@ obstacles = [
     Obstacle((5, 3), radius=0.05)
 ]
 goal = np.array([5, 5])
-# Initialize MPC with quadrotor radius parameter
 mpc = MPC(horizon=8, dt=0.1, quad_radius=0.3)
 
 # Simulation parameters
@@ -85,7 +84,7 @@ ani = FuncAnimation(
     frames=100,
     init_func=init,
     blit=True,
-    interval=100  # Frame interval in milliseconds (100ms → 10 FPS)
+    interval=100
 )
 
 # Show animation

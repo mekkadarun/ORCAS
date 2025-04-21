@@ -15,14 +15,11 @@ from motion_models.real_obstacle import GMMObstacle
 from control.real_mpc import RealCVaRGMMMPC_3D
 
 def draw_confidence_ellipse(ax, mean, cov, n_std=2.0, **kwargs):
-    """
-    Draw a covariance ellipse for visualization.
-    """
+    """Draw a covariance ellipse for visualization."""
     pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
     ell_radius_x = np.sqrt(1 + pearson)
     ell_radius_y = np.sqrt(1 - pearson)
-    ellipse = Ellipse((0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
-                      **kwargs)
+    ellipse = Ellipse((0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2, **kwargs)
     
     scale_x = np.sqrt(cov[0, 0]) * n_std
     scale_y = np.sqrt(cov[1, 1]) * n_std
@@ -34,9 +31,7 @@ def draw_confidence_ellipse(ax, mean, cov, n_std=2.0, **kwargs):
     return ax.add_patch(ellipse)
 
 def draw_risk_heatmap(ax, obstacles, cvar_controller, x_range, y_range, resolution=0.2):
-    """
-    Generate and draw a risk heatmap for visualization.
-    """
+    """Generate and draw a risk heatmap for visualization."""
     risk_map, X, Y = cvar_controller.cvar_avoidance.generate_risk_map(
         x_range, y_range, resolution, obstacles
     )
@@ -53,9 +48,7 @@ def draw_risk_heatmap(ax, obstacles, cvar_controller, x_range, y_range, resoluti
     return heatmap
 
 def run_simulation():
-    """
-    Run the simulation and create an animation with the 3D quadrotor model.
-    """
+    """Run the simulation and create an animation with the 3D quadrotor model."""
     # Initialize components
     # Initial state: [x, y, z, vx, vy, vz, phi, theta, psi, phi_dot, theta_dot, psi_dot]
     initial_state = np.zeros(12)
@@ -72,7 +65,6 @@ def run_simulation():
         GMMObstacle((2.0, 2.0, goal[2]), radius=0.3, n_components=2, is_3d=True),
         GMMObstacle((4.0, 4.0, goal[2]), radius=0.4, n_components=2, is_3d=True),
         GMMObstacle((2.70, 1.0, goal[2]), radius=0.3, n_components=2, is_3d=True),
-        # Add more obstacles in the path to the goal
         GMMObstacle((5.0, 5.0, goal[2]), radius=0.35, n_components=2, is_3d=True),
         GMMObstacle((6.0, 6.0, goal[2]), radius=0.25, n_components=2, is_3d=True)
     ]
@@ -101,7 +93,6 @@ def run_simulation():
         for _ in range(30):
             movement = np.random.multivariate_normal(mean=mean, cov=cov)
             obs.movement_history.append(movement)
-            # Also add to ambiguity set
             obs.ambiguity_set.add_movement_data(movement)
         
         for _ in range(5):
@@ -110,7 +101,6 @@ def run_simulation():
                 cov=[[0.1, 0, 0], [0, 0.1, 0], [0, 0, 0.1]]
             )
             obs.movement_history.append(outlier)
-            # Also add to ambiguity set
             obs.ambiguity_set.add_movement_data(outlier)
         
         # Initialize GMM and ambiguity set
@@ -448,8 +438,6 @@ def run_simulation():
     ax1.legend(loc='upper left')
     ax2.legend(loc='upper left')
     
-   
-    
     # Add title with paper reference
     fig.text(0.5, 0.01, "3D Implementation of 'Online-Learning-Based Distributionally Robust Motion Control'", 
              ha='center', fontsize=12, style='italic')
@@ -457,7 +445,6 @@ def run_simulation():
     plt.tight_layout()
     
     # Either save animation or show interactive plot
-    # Uncomment the next line to save the animation as a video file
     # ani.save('real_quadrotor_3d_visualization.mp4', writer='ffmpeg', fps=10, dpi=200)
     
     plt.show()

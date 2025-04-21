@@ -72,11 +72,11 @@ class DynamicMPC:
         # Solve problem
         prob = cvx.Problem(objective, constraints)
         prob.solve(
-                    solver=cvx.ECOS,
-                    verbose=False,
-                    max_iters=500,  # Increased from default 100
-                    abstol=1e-4,    # Absolute tolerance
-                    reltol=1e-4,    # Relative tolerance
-                    feastol=1e-4    # Feasibility tolerance
-                )
+            solver=cvx.ECOS,
+            verbose=False,
+            max_iters=500,  # Increased from default 100
+            abstol=1e-4,    # Absolute tolerance
+            reltol=1e-4,    # Relative tolerance
+            feastol=1e-4    # Feasibility tolerance
+        )
         return u.value if prob.status == cvx.OPTIMAL else None

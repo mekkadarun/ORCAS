@@ -7,6 +7,7 @@ class Environment:
         self.goal = goal
         
     def plot_environment(self, quadrotor_state, trajectory):
+        """Plot the environment, trajectory and current quadrotor position"""
         plt.figure(figsize=(10, 10))
         
         # Plot obstacles
@@ -24,7 +25,7 @@ class Environment:
         
         # Plot quadrotor
         plt.scatter(quadrotor_state[0], quadrotor_state[1], 
-                   s=100, c='orange', marker='^', label='Quadrotor')
+                  s=100, c='orange', marker='^', label='Quadrotor')
         
         plt.legend()
         plt.grid(True)

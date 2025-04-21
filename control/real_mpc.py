@@ -3,18 +3,14 @@ import numpy as np
 from control.cvar_constraints import CVaRObstacleAvoidance
 
 class RealCVaRGMMMPC_3D:
-    """
-    3D-optimized MPC controller using CVaR for risk assessment
-    """
+    """3D-optimized MPC controller using CVaR for risk assessment"""
+    
     def __init__(self, horizon=8, dt=0.1, quad_radius=0.3, confidence_level=0.95, safety_margin=0.6):
         self.horizon = horizon
         self.dt = dt
         self.quad_radius = quad_radius
         self.confidence_level = confidence_level
         self.safety_margin = safety_margin
-        
-        # Safety margin for collision avoidance
-        self.safety_margin = 0.6  # Margin for 3D environment
         
         self.cvar_avoidance = CVaRObstacleAvoidance(
             confidence_level=confidence_level,
@@ -41,21 +37,11 @@ class RealCVaRGMMMPC_3D:
         self.risk_scaling_factor = 4.0
         
         # 3D specific parameters
-        self.altitude_gain = 2.5      # Higher priority for altitude control (increased)
-        self.altitude_threshold = 0.2  # Threshold for altitude error (decreased)
+        self.altitude_gain = 2.5      # Higher priority for altitude control
+        self.altitude_threshold = 0.2  # Threshold for altitude error
         
     def optimize_trajectory(self, current_state, goal, obstacles):
-        """
-        Compute optimal control inputs for the quadrotor in 3D.
-        
-        Args:
-            current_state: Current state of the quadrotor [x, y, z, vx, vy, vz, phi, theta, psi, phi_dot, theta_dot, psi_dot]
-            goal: Goal position [x, y, z]
-            obstacles: List of obstacle objects
-            
-        Returns:
-            Optimal control inputs for the horizon
-        """
+        """Compute optimal control inputs for the quadrotor in 3D."""
         for obs in obstacles:
             if hasattr(obs, 'set_confidence_level'):
                 obs.set_confidence_level(self.confidence_level)
@@ -63,17 +49,7 @@ class RealCVaRGMMMPC_3D:
         return self.compute_safe_direction_3d(current_state, goal, obstacles)
         
     def check_collision(self, position, obstacles):
-        """
-        Check if a position is in collision with any obstacle.
-        Properly handles 3D positions and obstacles.
-        
-        Args:
-            position: Position to check [x, y, z]
-            obstacles: List of obstacles
-            
-        Returns:
-            True if in collision, False otherwise
-        """
+        """Check if a position is in collision with any obstacle."""
         for obs in obstacles:
             obs_pos = obs.get_position()
             
@@ -110,18 +86,7 @@ class RealCVaRGMMMPC_3D:
         return False
         
     def compute_safe_direction_3d(self, current_state, goal, obstacles):
-        """
-        Compute a safe direction based on the CVaR risk approach,
-        optimized for true 3D environment.
-        
-        Args:
-            current_state: Current state [x, y, z, vx, vy, vz, phi, theta, psi, phi_dot, theta_dot, psi_dot]
-            goal: Goal position [x, y, z]
-            obstacles: List of obstacles
-            
-        Returns:
-            Control inputs [thrust, roll_torque, pitch_torque, yaw_torque]
-        """
+        """Compute a safe direction based on the CVaR risk approach for 3D environment."""
         # Extract position and velocity
         pos = current_state[:3]
         vel = current_state[3:6]

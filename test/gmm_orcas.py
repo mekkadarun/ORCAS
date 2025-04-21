@@ -14,14 +14,11 @@ from motion_models.gmm_obstacle import GMMObstacle
 from control.gmm_mpc import CVaRGMMMPC
 
 def draw_confidence_ellipse(ax, mean, cov, n_std=2.0, **kwargs):
-    """
-    Draw a covariance ellipse for visualization.
-    """
+    """Draw a covariance ellipse for visualization."""
     pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
     ell_radius_x = np.sqrt(1 + pearson)
     ell_radius_y = np.sqrt(1 - pearson)
-    ellipse = Ellipse((0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
-                      **kwargs)
+    ellipse = Ellipse((0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2, **kwargs)
     
     scale_x = np.sqrt(cov[0, 0]) * n_std
     scale_y = np.sqrt(cov[1, 1]) * n_std
@@ -33,9 +30,7 @@ def draw_confidence_ellipse(ax, mean, cov, n_std=2.0, **kwargs):
     return ax.add_patch(ellipse)
 
 def draw_risk_heatmap(ax, obstacles, cvar_controller, x_range, y_range, resolution=0.2):
-    """
-    Generate and draw a risk heatmap for visualization.
-    """
+    """Generate and draw a risk heatmap for visualization."""
     risk_map, X, Y = cvar_controller.cvar_avoidance.generate_risk_map(
         x_range, y_range, resolution, obstacles
     )
@@ -52,9 +47,7 @@ def draw_risk_heatmap(ax, obstacles, cvar_controller, x_range, y_range, resoluti
     return heatmap
 
 def run_simulation():
-    """
-    Run the simulation and create an animation.
-    """
+    """Run the simulation and create an animation."""
     # Initialize components
     quadrotor = Quadrotor(np.array([0.0, 0.0, 0.0, 0.0]))
     obstacles = [
@@ -67,7 +60,7 @@ def run_simulation():
     # Initialize CVaR-based MPC controller
     mpc = CVaRGMMMPC(horizon=8, dt=0.1, quad_radius=0.3, confidence_level=0.95)
 
-    # Tracking variables - keeping these at the function level to be used in update()
+    # Tracking variables
     step_count = 0
     total_cost = 0.0
     actual_trajectory = []
@@ -88,7 +81,6 @@ def run_simulation():
         for _ in range(30):
             movement = np.random.multivariate_normal(mean=mean, cov=cov)
             obs.movement_history.append(movement)
-            # Also add to ambiguity set
             obs.ambiguity_set.add_movement_data(movement)
         
         for _ in range(5):
@@ -97,7 +89,6 @@ def run_simulation():
                 cov=[[0.1, 0], [0, 0.1]]
             )
             obs.movement_history.append(outlier)
-            # Also add to ambiguity set
             obs.ambiguity_set.add_movement_data(outlier)
         
         # Initialize GMM and ambiguity set
@@ -158,9 +149,7 @@ def run_simulation():
     risk_map_object = [risk_heatmap]
 
     def init():
-        """
-        Initialize animation elements.
-        """
+        """Initialize animation elements."""
         quad_marker.set_data([], [])
         traj_line.set_data([], [])
         for line in obs_traj_lines:
@@ -169,10 +158,8 @@ def run_simulation():
         return [quad_marker, traj_line, status_text] + risk_map_object + obs_markers + obs_traj_lines + get_ellipses()
 
     def update(frame):
-        """
-        Update animation for each frame.
-        """
-        nonlocal step_count, total_cost  # Use nonlocal to modify variables from the outer function
+        """Update animation for each frame."""
+        nonlocal step_count, total_cost
         step_count += 1
         
         current_state = quadrotor.get_state()
@@ -273,9 +260,7 @@ def run_simulation():
         return [quad_marker, traj_line, status_text] + risk_map_object + obs_markers + obs_traj_lines + get_ellipses()
 
     def get_ellipses():
-        """
-        Helper function to get all ellipse patches for animation.
-        """
+        """Helper function to get all ellipse patches for animation."""
         return [p for patches in ellipse_patches for p in patches]
     
     # Create animation
@@ -313,12 +298,11 @@ def run_simulation():
     fig.text(0.5, 0.01, "Implementation of 'Online-Learning-Based Distributionally Robust Motion Control'", 
              ha='center', fontsize=12, style='italic')
     
-    plt.subplots_adjust(right=0.75)  # Make room for legend and text box
+    plt.subplots_adjust(right=0.75)
     plt.tight_layout()
     plt.grid(True, alpha=0.3)
     
     # Either save animation or show interactive plot
-    # Uncomment the next line to save the animation as a video file
     # ani.save('gmm_orcas_visualization.mp4', writer='ffmpeg', fps=10, dpi=200)
     
     plt.show()

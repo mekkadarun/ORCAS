@@ -12,7 +12,7 @@ class CVaRObstacleAvoidance:
     
     def _get_scaled_safety_margin(self):
         """Scale safety margin based on confidence level"""
-        # CHANGE: Ensure a reasonable minimum safety margin even at low confidence
+        # Ensure a reasonable minimum safety margin even at low confidence
         base_confidence = 0.85  # Lower base confidence
         scaling_factor = 2.0    # Gentler scaling
         
@@ -22,19 +22,7 @@ class CVaRObstacleAvoidance:
         return self.base_safety_margin * (0.8 + scaling_factor * confidence_effect)
     
     def calculate_cvar_constraint(self, pos_var, obstacle, t, min_dist):
-        """
-        Calculate collision avoidance constraints using distributionally robust approach.
-        Now properly supports 3D positions and obstacles.
-        
-        Args:
-            pos_var: Position variable (from optimization)
-            obstacle: Obstacle object with ambiguity set
-            t: Time step index
-            min_dist: Minimum safe distance
-            
-        Returns:
-            List of constraint expressions
-        """
+        """Calculate collision avoidance constraints using distributionally robust approach."""
         constraints = []
         params = obstacle.get_constraint_parameters()
         center = params['center']
@@ -123,7 +111,7 @@ class CVaRObstacleAvoidance:
                 direction = vec_to_robot / np.linalg.norm(vec_to_robot)
                 
                 # Calculate scale factor based on chi-square distribution
-                # FIXED: Now the scale increases with confidence (chi2_val increases)
+                # Now the scale increases with confidence (chi2_val increases)
                 variance = direction.T @ reg_cov @ direction
                 scale_factor = np.sqrt(self.chi2_val * variance)
                 
@@ -147,18 +135,7 @@ class CVaRObstacleAvoidance:
         return constraints
     
     def calculate_risk(self, position, obstacle):
-        """
-        Calculate distributionally robust risk of collision with an obstacle.
-        Fully compatible with both 2D and 3D obstacles and positions.
-        
-        Args:
-            position: Current or test position (2D or 3D)
-            obstacle: Obstacle with ambiguity set
-            
-        Returns:
-            Risk value between 0 and 1
-        """
-        
+        """Calculate distributionally robust risk of collision with an obstacle."""
         params = obstacle.get_constraint_parameters()
         center = params['center']
         
@@ -240,7 +217,7 @@ class CVaRObstacleAvoidance:
                     eigvals = np.linalg.eigvalsh(cov_adj)
                     max_std = np.sqrt(max(eigvals))
                     
-                    # FIXED: Exponential risk model - now higher confidence means higher risk
+                    # Exponential risk model - now higher confidence means higher risk
                     # Instead of dividing by chi2_val, we multiply to increase risk with confidence
                     confidence_scale = max(1.0, self.chi2_val / 5.0)  # Normalize to reasonable range
                     comp_risk = weight * np.exp(-(comp_dist**2) / (2 * max_std**2 * confidence_scale))
@@ -258,17 +235,7 @@ class CVaRObstacleAvoidance:
         return min(risk, 1.0)  # Ensure risk is bounded
     
     def calculate_total_risk(self, position, obstacles):
-        """
-        Calculate total risk from all obstacles using distributionally robust approach.
-        Works with both 2D and 3D positions and obstacles.
-        
-        Args:
-            position: Current or test position (2D or 3D)
-            obstacles: List of obstacles (2D or 3D)
-            
-        Returns:
-            Combined risk value between 0 and 1
-        """
+        """Calculate total risk from all obstacles using distributionally robust approach."""
         if not obstacles:
             return 0.0
             
@@ -284,19 +251,7 @@ class CVaRObstacleAvoidance:
         return total_risk
     
     def generate_risk_map(self, x_range, y_range, resolution, obstacles):
-        """
-        Generate a 2D risk map for visualization.
-        
-        Args:
-            x_range: Range of x values (min, max)
-            y_range: Range of y values (min, max)
-            resolution: Grid resolution
-            obstacles: List of obstacles
-            
-        Returns:
-            risk_map: 2D numpy array of risk values
-            X, Y: Meshgrid for plotting
-        """
+        """Generate a 2D risk map for visualization."""
         x = np.linspace(x_range[0], x_range[1], int((x_range[1]-x_range[0])/resolution))
         y = np.linspace(y_range[0], y_range[1], int((y_range[1]-y_range[0])/resolution))
         X, Y = np.meshgrid(x, y)

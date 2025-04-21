@@ -9,7 +9,7 @@ class CVaRGMMMPC:
         self.quad_radius = quad_radius
         self.confidence_level = confidence_level
         
-        # INCREASED safety margin for collision avoidance
+        # Safety margin for collision avoidance
         self.safety_margin = 0.6  # Increased from 0.5
         
         self.cvar_avoidance = CVaRObstacleAvoidance(
@@ -17,26 +17,27 @@ class CVaRGMMMPC:
             safety_margin=self.safety_margin
         )
         
-        # Modified weights to better balance goal-reaching and risk aversion
-        self.w_goal = 12.0         # DECREASED goal weight (was 10.0)
+        # Controller weights
+        self.w_goal = 12.0        # Decreased goal weight (was 10.0)
         self.w_control = 0.8      # Weight for control effort term
         self.w_smoothness = 0.5   # Weight for control smoothness term
-        self.w_risk = 18.0        # SIGNIFICANTLY INCREASED risk weight (was 20.0)
+        self.w_risk = 18.0        # Significantly increased risk weight (was 20.0)
         
         # Flag to bypass optimization and use safe direction directly
-        self.use_safe_direction = True  # Set to True to skip problematic constraints
+        self.use_safe_direction = True  # Skip problematic constraints
         
-        # Enhanced safety parameters
-        self.safety_distance = 0.9  # SIGNIFICANTLY INCREASED base safety distance (was 0.7)
-        self.num_direction_samples = 40  # INCREASED direction samples for finer coverage (was 24)
+        # Safety parameters
+        self.safety_distance = 0.9  # Significantly increased base safety distance (was 0.7)
+        self.num_direction_samples = 40  # Increased direction samples for finer coverage (was 24)
         self.min_goal_alignment = 0.1  # Allow deviation from goal direction
         
-        # New parameters for risk-based velocity modulation
-        self.max_velocity = 1.7       # REDUCED maximum velocity (was 2.0)
+        # Risk-based velocity modulation parameters
+        self.max_velocity = 1.7       # Reduced maximum velocity (was 2.0)
         self.min_velocity = 0.3       # Minimum allowed velocity
-        self.risk_scaling_factor = 4.0  # INCREASED scaling factor (was 2.0) to slow down more in risky areas
+        self.risk_scaling_factor = 4.0  # Increased scaling factor (was 2.0) to slow down more in risky areas
 
     def optimize_trajectory(self, current_state, goal, obstacles):
+        """Compute optimal control inputs for the quadrotor."""
         # If we're using safe direction approach directly, skip the optimization
         if self.use_safe_direction:
             return self.compute_safe_direction(current_state, goal, obstacles)
@@ -77,9 +78,6 @@ class CVaRGMMMPC:
             constraints += [
                 cvx.norm(pos[-1] - goal) <= 0.9 * current_dist_to_goal
             ]
-            
-            # Simplified obstacle avoidance (avoid DCP errors)
-            # We're removing the problematic CVaR constraints
             
             # Objective function components
             # Goal reaching cost
@@ -142,17 +140,7 @@ class CVaRGMMMPC:
         return self.compute_safe_direction(current_state, goal, obstacles)
     
     def check_collision(self, position, obstacles):
-        """
-        Check if a position is in collision with any obstacle.
-        Enhanced with more conservative collision checking.
-        
-        Args:
-            position: Position to check
-            obstacles: List of obstacles
-            
-        Returns:
-            True if in collision, False otherwise
-        """
+        """Check if a position is in collision with any obstacle."""
         for obs in obstacles:
             obs_pos = obs.get_position()
             
@@ -162,7 +150,7 @@ class CVaRGMMMPC:
                 obs_velocity = np.linalg.norm(obs.latest_movement)
             
             # Dynamic safety distance with increased velocity factor
-            velocity_factor = 1.0 + min(obs_velocity * 3.0, 2.0)  # Increased scaling (was 2.0, 1.0)
+            velocity_factor = 1.0 + min(obs_velocity * 3.0, 2.0)  # Increased scaling
             
             # Add prediction factor - check where the obstacle will be
             prediction_time = 0.2  # Look ahead 200ms
@@ -191,10 +179,7 @@ class CVaRGMMMPC:
         return False
         
     def compute_safe_direction(self, current_state, goal, obstacles):
-        """
-        Compute a safe direction based on the CVaR risk approach.
-        Enhanced version with improved obstacle avoidance that prevents backward movements.
-        """
+        """Compute a safe direction based on the CVaR risk approach."""
         print("Using CVaR-based safe direction")
         
         to_goal = goal - current_state[:2]
@@ -270,8 +255,8 @@ class CVaRGMMMPC:
                         risk = risk * 5.0  # Extreme penalty for very high risk
                     
                     # New weighting approach prioritizing safety while maintaining progress
-                    risk_weight = 4.0       # INCREASED from 2.0
-                    alignment_weight = 0.8  # DECREASED from 1.0
+                    risk_weight = 4.0       # Increased from 2.0
+                    alignment_weight = 0.8  # Decreased from 1.0
                     
                     # This formula prioritizes directions that are both:
                     # 1. Low risk (multiply by risk_weight to emphasize this even more)
@@ -365,7 +350,7 @@ class CVaRGMMMPC:
                 relative_vel = -current_state[2:] + obs_velocity
                 
                 # Only consider very close obstacles for repulsion
-                danger_dist = self.quad_radius + obs.radius + 1.2  # INCREASED from 0.8
+                danger_dist = self.quad_radius + obs.radius + 1.2  # Increased from 0.8
                 
                 if dist_to_obs < danger_dist:
                     # Normalize direction
@@ -394,7 +379,7 @@ class CVaRGMMMPC:
                     strength = np.exp(proximity_ratio) - 1.0  # Exponential scaling
                     
                     # Combined repulsive force with collision prediction
-                    repulsive_force += dir_to_obs * strength * 0.6 * collision_factor  # INCREASED strength from 0.4
+                    repulsive_force += dir_to_obs * strength * 0.6 * collision_factor  # Increased strength
             
             # Combine forces with safest direction 
             # (with emphasis on tangential sliding for smooth avoidance)

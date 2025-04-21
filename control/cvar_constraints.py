@@ -9,19 +9,7 @@ class CVaRObstacleAvoidance:
         self.chi2_val = chi2.ppf(confidence_level, df=2)
     
     def calculate_cvar_constraint(self, pos_var, obstacle, t, min_dist):
-        """
-        Calculate collision avoidance constraints using distributionally robust approach.
-        Implements the key formulation from the paper's Theorem 1.
-        
-        Args:
-            pos_var: Position variable (from optimization)
-            obstacle: Obstacle object with ambiguity set
-            t: Time step index
-            min_dist: Minimum safe distance
-            
-        Returns:
-            List of constraint expressions
-        """
+        """Calculate collision avoidance constraints using distributionally robust approach."""
         constraints = []
         params = obstacle.get_constraint_parameters()
         center = params['center']
@@ -103,17 +91,7 @@ class CVaRObstacleAvoidance:
         return constraints
     
     def calculate_risk(self, position, obstacle):
-        """
-        Calculate distributionally robust risk of collision with an obstacle.
-        Implements the risk assessment approach from the paper.
-        
-        Args:
-            position: Current or test position
-            obstacle: Obstacle with ambiguity set
-            
-        Returns:
-            Risk value between 0 and 1
-        """
+        """Calculate distributionally robust risk of collision with an obstacle."""
         params = obstacle.get_constraint_parameters()
         center = params['center']
         risk = 0.0
@@ -185,16 +163,7 @@ class CVaRObstacleAvoidance:
         return min(risk, 1.0)  # Ensure risk is bounded
     
     def calculate_total_risk(self, position, obstacles):
-        """
-        Calculate total risk from all obstacles using distributionally robust approach.
-        
-        Args:
-            position: Current or test position
-            obstacles: List of obstacles
-            
-        Returns:
-            Combined risk value between 0 and 1
-        """
+        """Calculate total risk from all obstacles using distributionally robust approach."""
         total_risk = 0.0
         
         # Calculate risk from each obstacle
@@ -207,19 +176,7 @@ class CVaRObstacleAvoidance:
         return total_risk
     
     def generate_risk_map(self, x_range, y_range, resolution, obstacles):
-        """
-        Generate a 2D risk map for visualization.
-        
-        Args:
-            x_range: Range of x values (min, max)
-            y_range: Range of y values (min, max)
-            resolution: Grid resolution
-            obstacles: List of obstacles
-            
-        Returns:
-            risk_map: 2D numpy array of risk values
-            X, Y: Meshgrid for plotting
-        """
+        """Generate a 2D risk map for visualization."""
         x = np.linspace(x_range[0], x_range[1], int((x_range[1]-x_range[0])/resolution))
         y = np.linspace(y_range[0], y_range[1], int((y_range[1]-y_range[0])/resolution))
         X, Y = np.meshgrid(x, y)

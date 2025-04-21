@@ -2,13 +2,7 @@ import numpy as np
 
 class RealQuadrotor:
     def __init__(self, initial_state=None):
-        """
-        Initialize a realistic 3D quadrotor model as described in the paper.
-        
-        Args:
-            initial_state: Initial state vector [x, y, z, x_dot, y_dot, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot]
-                           If None, initialize at zero state
-        """
+        """Initialize a realistic 3D quadrotor model as described in the paper"""
         # State: [x, y, z, ẋ, ẏ, ż, φ, θ, ψ, φ̇, θ̇, ψ̇]
         # Where:
         # x, y, z: position
@@ -40,17 +34,7 @@ class RealQuadrotor:
         self.trajectory = []
         
     def update_state(self, control_input, dt):
-        """
-        Update the quadrotor state based on control inputs and dynamics.
-        
-        Args:
-            control_input: [u1, u2, u3, u4] where:
-                u1: Thrust along z-axis (N)
-                u2: Torque for roll control (N·m)
-                u3: Torque for pitch control (N·m)
-                u4: Torque for yaw control (N·m)
-            dt: Time step (s)
-        """
+        """Update the quadrotor state based on control inputs and dynamics"""
         # Clip control inputs to respect physical limits
         u1 = np.clip(control_input[0], 0, self.max_thrust)
         u2 = np.clip(control_input[1], -self.max_torque, self.max_torque)
@@ -67,9 +51,9 @@ class RealQuadrotor:
         # Translational dynamics (as per the paper)
         x_ddot = self.g * theta
         y_ddot = -self.g * phi
-        # FIXED: The z-axis force is now correctly oriented
+        # The z-axis force is now correctly oriented
         # Positive thrust (u1) produces upward acceleration (negative z_ddot)
-        z_ddot = u1 / self.m - self.g  # Fixed: Added gravity and corrected sign
+        z_ddot = u1 / self.m - self.g  # Added gravity and corrected sign
         
         # Rotational dynamics (as per the paper)
         phi_ddot = self.l / self.Ixx * u2
@@ -104,21 +88,21 @@ class RealQuadrotor:
         self.trajectory.append(self.state[:3].copy())
         
     def get_state(self):
-        """Return the full state vector."""
+        """Return the full state vector"""
         return self.state.copy()
     
     def get_position(self):
-        """Return the position coordinates [x, y, z]."""
+        """Return the position coordinates [x, y, z]"""
         return self.state[:3].copy()
     
     def get_orientation(self):
-        """Return the orientation angles [φ, θ, ψ]."""
+        """Return the orientation angles [φ, θ, ψ]"""
         return self.state[6:9].copy()
     
     def get_velocity(self):
-        """Return the velocity vector [ẋ, ẏ, ż]."""
+        """Return the velocity vector [ẋ, ẏ, ż]"""
         return self.state[3:6].copy()
     
     def get_angular_velocity(self):
-        """Return the angular velocity vector [φ̇, θ̇, ψ̇]."""
+        """Return the angular velocity vector [φ̇, θ̇, ψ̇]"""
         return self.state[9:12].copy()

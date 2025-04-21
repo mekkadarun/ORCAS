@@ -3,21 +3,10 @@ import sklearn.mixture as mix
 from control.real_ambiguity_set import AmbiguitySet
 
 class GMMObstacle:
-    """
-    Obstacle with Gaussian Mixture Model motion prediction.
-    Now with full 3D support.
-    """
+    """Obstacle with Gaussian Mixture Model motion prediction with full 3D support"""
+    
     def __init__(self, initial_position, radius=0.5, n_components=3, is_3d=False, confidence_level=0.95):
-        """
-        Initialize an obstacle with GMM-based movement.
-        
-        Args:
-            initial_position: Initial position of the obstacle (2D or 3D)
-            radius: Radius of the obstacle
-            n_components: Number of mixture components for GMM
-            is_3d: Whether the obstacle operates in 3D space
-            confidence_level: Confidence level for uncertainty modeling
-        """
+        """Initialize an obstacle with GMM-based movement"""
         self.position = np.array(initial_position, dtype=float)
         self.radius = radius
         self.n_components = n_components
@@ -69,15 +58,7 @@ class GMMObstacle:
             return False
     
     def update_position(self, dt, use_gmm=True, maintain_z=False, goal_z=None):
-        """
-        Update obstacle position based on learned movement patterns.
-        
-        Args:
-            dt: Time step
-            use_gmm: Whether to use GMM for movement prediction
-            maintain_z: Whether to maintain a fixed z-coordinate
-            goal_z: Target z-coordinate to maintain (if maintain_z is True)
-        """
+        """Update obstacle position based on learned movement patterns"""
         if use_gmm and self.gmm is not None and len(self.movement_history) >= 3:
             # Sample from GMM with small noise
             movement = self.gmm.sample(1)[0][0]
@@ -135,10 +116,7 @@ class GMMObstacle:
         return self.position.copy()
         
     def get_constraint_parameters(self):
-        """
-        Get parameters needed for creating constraints in MPC.
-        Includes proper 3D support.
-        """
+        """Get parameters needed for creating constraints in MPC"""
         params = {
             'center': self.position.copy(),
             'radius': self.radius,

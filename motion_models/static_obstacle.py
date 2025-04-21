@@ -6,6 +6,7 @@ class Obstacle:
         self.radius = radius
         
     def get_position(self):
+        """Return the current position of the obstacle"""
         return self.position.copy()
         
     def get_constraint_parameters(self):

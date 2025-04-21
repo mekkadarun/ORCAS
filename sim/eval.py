@@ -17,10 +17,8 @@ from motion_models.real_obstacle import GMMObstacle
 from control.real_mpc import RealCVaRGMMMPC_3D
 
 class ConfidenceLevelEvaluator:
-    """
-    Evaluates how different confidence levels affect quadrotor performance
-    in the distributionally robust motion control implementation.
-    """
+    """Evaluates how different confidence levels affect quadrotor performance in the distributionally robust motion control implementation."""
+    
     def __init__(self, seed=42):
         # Default goal position
         self.goal = np.array([7.0, 7.0, 3.0])
@@ -49,15 +47,7 @@ class ConfidenceLevelEvaluator:
         ]
         
     def setup_scenario(self, confidence_level=0.95, obstacle_count=5, obstacle_radius=0.3, scenario_seed=None):
-        """
-        Set up a standard test scenario with specified parameters.
-        
-        Args:
-            confidence_level: Confidence level for CVaR computation
-            obstacle_count: Number of obstacles in the environment
-            obstacle_radius: Radius of the obstacles
-            scenario_seed: Seed for this specific scenario (combines with base seed)
-        """
+        """Set up a standard test scenario with specified parameters."""
         # Set scenario-specific seed for reproducibility across confidence levels
         if scenario_seed is not None:
             np.random.seed(self.seed + scenario_seed)
@@ -91,10 +81,7 @@ class ConfidenceLevelEvaluator:
         self._pretrain_obstacle_models(scenario_seed)
     
     def _pretrain_obstacle_models(self, scenario_seed=None):
-        """
-        Pre-train GMM models with consistent movement patterns.
-        Uses deterministic initialization for fair comparison.
-        """
+        """Pre-train GMM models with consistent movement patterns. Uses deterministic initialization for fair comparison."""
         # Use scenario seed if provided
         if scenario_seed is not None:
             np.random.seed(self.seed + scenario_seed + 100)  # Different offset for training
@@ -141,18 +128,7 @@ class ConfidenceLevelEvaluator:
         np.random.seed(self.seed)
     
     def run_simulation(self, max_steps=300, scenario_name=None, use_fixed_sequence=False, fixed_sequence=None):
-        """
-        Run a simulation with the current configuration.
-        
-        Args:
-            max_steps: Maximum number of simulation steps
-            scenario_name: Name of the scenario for tracking
-            use_fixed_sequence: Whether to use a fixed random number sequence
-            fixed_sequence: Pre-generated random sequence to use
-            
-        Returns:
-            Dictionary with simulation results and random sequence used
-        """
+        """Run a simulation with the current configuration."""
         start_time = time.time()
         
         # Initialize storage
@@ -200,10 +176,7 @@ class ConfidenceLevelEvaluator:
             
             # Update obstacle positions - use standard update
             for i, obs in enumerate(self.obstacles):
-                # Control randomness using the seed, but don't try to override
-                # the movement directly since that method parameter doesn't exist
                 obs.update_position(self.mpc.dt, use_gmm=True, maintain_z=True, goal_z=self.goal[2])
-                
                 obstacle_trajectories[i].append(obs.get_position().copy())
             
             # Generate control sequence using MPC
@@ -297,17 +270,7 @@ class ConfidenceLevelEvaluator:
         }
     
     def evaluate_confidence_levels(self, confidence_levels, runs_per_level=10, use_identical_scenarios=True):
-        """
-        Evaluate performance across different confidence levels with improved statistical rigor.
-        
-        Args:
-            confidence_levels: List of confidence levels to test
-            runs_per_level: Number of runs per confidence level (increased for better statistics)
-            use_identical_scenarios: Whether to use identical scenarios across confidence levels
-            
-        Returns:
-            DataFrame with results
-        """
+        """Evaluate performance across different confidence levels with improved statistical rigor."""
         all_results = []
         
         # Generate fixed random seeds for each run
@@ -357,7 +320,7 @@ class ConfidenceLevelEvaluator:
         return results_df
     
     def _add_statistical_analysis(self, results_df):
-        """Add statistical significance tests to results"""
+        """Add statistical significance tests to results."""
         try:
             from scipy import stats
 
@@ -424,13 +387,7 @@ class ConfidenceLevelEvaluator:
             print("SciPy not found. Skipping statistical analysis.")
     
     def visualize_confidence_results(self, results_df, output_file=None):
-        """
-        Create intuitive visualizations of confidence level effects with statistical significance.
-        
-        Args:
-            results_df: DataFrame with simulation results
-            output_file: Optional file path to save visualizations
-        """
+        """Create intuitive visualizations of confidence level effects with statistical significance."""
         # Set up the figure with a grid layout
         plt.figure(figsize=(18, 12))
         gs = GridSpec(2, 3, figure=plt.gcf())
@@ -702,13 +659,7 @@ class ConfidenceLevelEvaluator:
             plt.show()
     
     def plot_trajectory_comparison(self, results_df, output_file=None):
-        """
-        Plot trajectories for different confidence levels using median performance runs.
-        
-        Args:
-            results_df: DataFrame with simulation results
-            output_file: Optional file path to save visualizations
-        """
+        """Plot trajectories for different confidence levels using median performance runs."""
         # Select successful runs for each confidence level
         successful_runs = results_df[results_df['success'] == True]
         
@@ -836,9 +787,8 @@ class ConfidenceLevelEvaluator:
 
 
 # Helper function
-
 def mark_significance(value, p_values_df, confidence_level, p_value_col):
-    """Add significance markers to values based on p-values"""
+    """Add significance markers to values based on p-values."""
     if confidence_level == 0.95:
         return f"{value:.3f}"
     

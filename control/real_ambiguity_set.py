@@ -3,10 +3,7 @@ import sklearn.mixture as mix
 from scipy.stats import chi2
 
 class AmbiguitySet:
-    """
-    Implementation of a data-stream-driven ambiguity set for distributionally
-    robust collision avoidance with moving obstacles
-    """
+    """Implementation of a data-stream-driven ambiguity set for distributionally robust collision avoidance with moving obstacles"""
     
     def __init__(self, max_components=5, confidence_level=0.90, regularization=1e-6):
         self.max_components = max_components
@@ -37,14 +34,11 @@ class AmbiguitySet:
         return False
     
     def add_movement_data(self, movement):
-        """Add new movement observation to history."""
+        """Add new movement observation to history"""
         self.movement_history.append(movement)
     
     def update_mixture_model(self):
-        """
-        Fit a mixture model to movement history, implementing the online
-        learning approach described in the paper.
-        """
+        """Fit a mixture model to movement history, implementing the online learning approach"""
         if len(self.movement_history) < 3:
             return False
             
@@ -101,9 +95,7 @@ class AmbiguitySet:
         return True
     
     def update_ambiguity_set(self):
-        """
-        Construct the ambiguity set based on the fitted mixture model.
-        """
+        """Construct the ambiguity set based on the fitted mixture model"""
         if self.mixture_model is None:
             return False
         
@@ -153,9 +145,7 @@ class AmbiguitySet:
         return True
     
     def get_uncertainty(self, time_index=0):
-        """
-        Get uncertainty parameters for a specific prediction time.
-        """
+        """Get uncertainty parameters for a specific prediction time"""
         if self.ambiguity_params is None:
             return None
         
@@ -196,10 +186,7 @@ class AmbiguitySet:
         return uncertainty
     
     def get_ambiguity_set_parameters(self):
-        """
-        Returns the parameters of the ambiguity set as defined in equation (10)
-        in the paper.
-        """
+        """Returns the parameters of the ambiguity set as defined in equation (10) in the paper"""
         if not self.basic_ambiguity_sets:
             return None
             
@@ -210,11 +197,7 @@ class AmbiguitySet:
         }
     
     def worst_case_risk(self, position, obstacle_pos, min_dist):
-        """
-        Calculate worst-case risk based on the ambiguity set.
-        Implements the distributionally robust approach from the paper.
-        Now with proper 3D support.
-        """
+        """Calculate worst-case risk based on the ambiguity set with proper 3D support"""
         if self.ambiguity_params is None:
             dist = np.linalg.norm(position - obstacle_pos)
             if dist <= min_dist:
@@ -275,14 +258,13 @@ class AmbiguitySet:
             # Variance along direction
             variance = direction.T @ cov_adj @ direction
             
-            # Scale factor based on chi-square value - higher confidence means higher scale
+            # Scale factor based on chi-square value
             scale = np.sqrt(self.chi2_val * variance)
             
             # Compute distance to predicted obstacle position
             pred_dist = np.linalg.norm(position_adj - pred_obstacle_pos)
             
-            # FIXED: Component risk (using exponential decay model)
-            # Higher chi2_val (confidence) means SLOWER decay with distance
+            # Component risk using exponential decay model
             confidence_scale = max(1.0, self.chi2_val / 3.0)
             comp_risk = weight * np.exp(-(pred_dist - min_dist)**2 / (2 * scale**2 * confidence_scale))
             
@@ -292,7 +274,7 @@ class AmbiguitySet:
         return min(total_risk, 1.0)
     
     def sample_movement(self):
-        """Sample a movement from the current mixture model."""
+        """Sample a movement from the current mixture model"""
         if self.mixture_model is None:
             # Default random movement
             if len(self.movement_history) > 0 and len(self.movement_history[0]) >= 3:
