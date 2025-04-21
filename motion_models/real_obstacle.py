@@ -3,24 +3,15 @@ import sklearn.mixture as mix
 from control.real_ambiguity_set import AmbiguitySet
 
 class GMMObstacle:
-    """
-    Obstacle with Gaussian Mixture Model motion prediction.
-    Now with full 3D support.
-    """
-    def __init__(self, initial_position, radius=0.5, n_components=3, is_3d=False):
-        """
-        Initialize an obstacle with GMM-based movement.
-        
-        Args:
-            initial_position: Initial position of the obstacle (2D or 3D)
-            radius: Radius of the obstacle
-            n_components: Number of mixture components for GMM
-            is_3d: Whether the obstacle operates in 3D space
-        """
+    """Obstacle with Gaussian Mixture Model motion prediction with full 3D support"""
+    
+    def __init__(self, initial_position, radius=0.5, n_components=3, is_3d=False, confidence_level=0.95):
+        """Initialize an obstacle with GMM-based movement"""
         self.position = np.array(initial_position, dtype=float)
         self.radius = radius
         self.n_components = n_components
         self.is_3d = is_3d
+        self.confidence_level = confidence_level
         
         # Movement history for GMM learning
         self.movement_history = []
@@ -32,7 +23,19 @@ class GMMObstacle:
         self.latest_movement = None
         
         # Create ambiguity set for robust motion control
-        self.ambiguity_set = AmbiguitySet(max_components=n_components)
+        self.ambiguity_set = AmbiguitySet(
+            max_components=n_components,
+            confidence_level=confidence_level
+        )
+        
+    def set_confidence_level(self, confidence_level):
+        """Update confidence level for this obstacle and its ambiguity set"""
+        if self.confidence_level != confidence_level:
+            self.confidence_level = confidence_level
+            # Update ambiguity set confidence level
+            self.ambiguity_set.set_confidence_level(confidence_level)
+            return True
+        return False
         
     def _fit_gmm(self):
         """Fit GMM to movement history data"""
@@ -55,15 +58,7 @@ class GMMObstacle:
             return False
     
     def update_position(self, dt, use_gmm=True, maintain_z=False, goal_z=None):
-        """
-        Update obstacle position based on learned movement patterns.
-        
-        Args:
-            dt: Time step
-            use_gmm: Whether to use GMM for movement prediction
-            maintain_z: Whether to maintain a fixed z-coordinate
-            goal_z: Target z-coordinate to maintain (if maintain_z is True)
-        """
+        """Update obstacle position based on learned movement patterns"""
         if use_gmm and self.gmm is not None and len(self.movement_history) >= 3:
             # Sample from GMM with small noise
             movement = self.gmm.sample(1)[0][0]
@@ -107,9 +102,12 @@ class GMMObstacle:
         if len(self.movement_history) > 100:
             self.movement_history.pop(0)
             
-        # Periodically refit GMM
+        # Periodically refit GMM and update ambiguity set
         if len(self.movement_history) % 5 == 0:
             self._fit_gmm()
+            # Make sure ambiguity set is also updated
+            self.ambiguity_set.add_movement_data(movement / dt)
+            self.ambiguity_set.update_mixture_model()
             
         return movement
         
@@ -118,10 +116,7 @@ class GMMObstacle:
         return self.position.copy()
         
     def get_constraint_parameters(self):
-        """
-        Get parameters needed for creating constraints in MPC.
-        Includes proper 3D support.
-        """
+        """Get parameters needed for creating constraints in MPC"""
         params = {
             'center': self.position.copy(),
             'radius': self.radius,
@@ -130,6 +125,9 @@ class GMMObstacle:
         
         # Add uncertainty from ambiguity set if available
         if hasattr(self, 'ambiguity_set'):
+            # Ensure ambiguity set uses the current confidence level
+            self.ambiguity_set.set_confidence_level(self.confidence_level)
+            
             for t in range(5):  # Look ahead 5 steps
                 uncertainty = self.ambiguity_set.get_uncertainty(t)
                 if uncertainty:

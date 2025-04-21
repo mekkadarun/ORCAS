@@ -4,16 +4,7 @@ from control.ambiguity_set import AmbiguitySet
 
 class GMMObstacle:
     def __init__(self, position, radius=0.5, n_components=4, random_state=30):
-        """
-        Initialize a Gaussian Mixture Model-based obstacle with a
-        distributionally robust representation using ambiguity sets
-        
-        Args:
-            position: Initial position of the obstacle (x, y)
-            radius: Radius of the obstacle
-            n_components: Number of Gaussian components in the mixture model
-            random_state: Random seed for reproducibility
-        """
+        """Initialize a Gaussian Mixture Model-based obstacle with a distributionally robust representation"""
         self.position = np.array(position, dtype=float)
         self.radius = radius
         self.n_components = n_components
@@ -34,7 +25,6 @@ class GMMObstacle:
         self.latest_movement = np.zeros(2)
         
         # Initialize ambiguity set for distributionally robust approach
-        # This implements the paper's ambiguity set concept
         self.ambiguity_set = AmbiguitySet(
             max_components=n_components,
             confidence_level=0.95,
@@ -46,13 +36,7 @@ class GMMObstacle:
         return self.position.copy()
     
     def update_position(self, dt, use_gmm=True):
-        """
-        Update position based on GMM prediction using online learning
-        
-        Args:
-            dt: Time step
-            use_gmm: Whether to use GMM for movement prediction
-        """
+        """Update position based on GMM prediction using online learning"""
         if use_gmm and len(self.movement_history) >= 10:
             # Sample movement from the GMM
             movement = self._sample_from_gmm() * dt
@@ -70,7 +54,6 @@ class GMMObstacle:
         self.movement_history.append(movement_vector)
         
         # Update ambiguity set with new movement data
-        # This is key for the online learning aspect from the paper
         self.ambiguity_set.add_movement_data(movement_vector)
         
         # Refit GMM and update ambiguity set periodically
@@ -79,10 +62,7 @@ class GMMObstacle:
             self.ambiguity_set.update_mixture_model()
     
     def _fit_gmm(self):
-        """
-        Fit GMM to movement history with stability improvements.
-        Implements robust fitting as suggested in the paper.
-        """
+        """Fit GMM to movement history with stability improvements"""
         if len(self.movement_history) < 10:
             return
             
@@ -194,17 +174,7 @@ class GMMObstacle:
             return np.random.normal(0, 0.1, 2)
     
     def get_uncertainty_ellipses(self, time_horizon=10, time_step=0.1):
-        """
-        Get prediction ellipses for a time horizon based on ambiguity set
-        
-        Args:
-            time_horizon: Number of time steps to predict
-            time_step: Size of each time step
-            
-        Returns:
-            List of dictionaries containing mean and covariance for components
-            at each time step
-        """
+        """Get prediction ellipses for a time horizon based on ambiguity set"""
         if len(self.movement_history) < 10:
             # Simple circular uncertainty if insufficient data
             uncertainty = []
@@ -268,12 +238,7 @@ class GMMObstacle:
         return uncertainty
     
     def get_constraint_parameters(self):
-        """
-        Return parameters needed for collision avoidance constraint
-        
-        Returns:
-            Dictionary with position, radius, and uncertainty parameters
-        """
+        """Return parameters needed for collision avoidance constraint"""
         return {
             'center': self.position,
             'radius': self.radius,
@@ -281,13 +246,5 @@ class GMMObstacle:
         }
     
     def distance_to(self, point):
-        """
-        Calculate distance from point to obstacle surface
-        
-        Args:
-            point: Point to calculate distance from
-            
-        Returns:
-            Distance from point to obstacle surface (negative if inside)
-        """
+        """Calculate distance from point to obstacle surface"""
         return np.linalg.norm(point - self.position) - self.radius
