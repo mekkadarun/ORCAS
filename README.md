@@ -1,4 +1,4 @@
-# ORCAS: Online-Learning-Based Distributionally Robust Motion Control
+# ORCAS: Online-Robust-Collision-Avoidance-System
 
 This repository implements an advanced motion control system for autonomous quadrotor navigation through uncertain environments. The implementation is based on the paper "Online-Learning-Based Distributionally Robust Motion Control".
 
