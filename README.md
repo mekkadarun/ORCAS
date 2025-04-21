@@ -63,16 +63,16 @@ The ORCAS (Online Robust Control for Autonomous Systems) framework provides:
 
 ```bash
 # Run static obstacle simulation
-python examples/static_orcas.py
+python test/static_orcas.py
 
 # Run dynamic obstacle simulation
-python examples/dynamic_orcas.py
+python test/dynamic_orcas.py
 
 # Run GMM-based uncertainty simulation with visualization
-python examples/gmm_orcas.py
+python test/gmm_orcas.py
 
 # Run full 3D simulation
-python examples/real_orcas.py
+python test/real_orcas.py
 ```
 
 ### Evaluation
@@ -81,7 +81,7 @@ The framework includes tools to evaluate performance across different confidence
 
 ```bash
 # Run evaluation with 10 runs per confidence level
-python eval.py --runs 10 --seed 42 --output results/confidence_eval
+python sim/eval.py --runs 10 --seed 42 --output results/confidence_eval
 ```
 
 ## Method
@@ -100,18 +100,6 @@ The approach combines three key techniques:
 - Robot motion planning with uncertainty
 - Safe navigation in crowds
 - Collision avoidance systems with probabilistic guarantees
-
-## Citation
-
-If you use this code in your research, please cite:
-```
-@article{ORCAS2023,
-  title={Online-Learning-Based Distributionally Robust Motion Control},
-  author={[Author names]},
-  journal={[Journal]},
-  year={2023}
-}
-```
 
 ## License
 
